@@ -624,7 +624,7 @@ addLayer("B", {
     update(diff){
         let data = player.B
 
-         if (hasMilestone('G',3)) {generalizedBuyableLogic(diff, this.layer, null)}
+         if (hasMilestone('G',3)) {generalizedBuyableLogic(diff, this.layer, hasMilestone('D',2))}
 
         if (player.G.layerShown) data.unlocked = true
     },
@@ -1909,7 +1909,7 @@ addLayer("D", {
                 return player.D.resets.mul(1e20)
             },
             effectDescription() {
-                return "Reward: Keep beta generation at 250%, per milestone keep beta row upgrade, delta reset*1e20 multiply gamma <br>" +
+                return "Reward: Keep beta generation at 250%, per milestone keep beta row upgrade, buy all delta buyables at once, delta reset*1e20 multiply gamma <br>" +
                     "Currently: " +
                     format(milestoneEffect("D", 2))+"x"
             },
@@ -1937,7 +1937,7 @@ addLayer("D", {
                 return val 
             },
             effectDescription() {
-                return "Reward: Each New Delta reset boost Duplicates by x3 <br>" +"Currently: "+ format(milestoneEffect(this.layer, this.id))+"x"
+                return "Reward: Each new delta reset boost Duplicates by x3 <br>" +"Currently: "+ format(milestoneEffect(this.layer, this.id))+"x"
             },
             style: {'width': '750px'},
         },

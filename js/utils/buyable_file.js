@@ -90,31 +90,31 @@ function buyAllAtOnce(layer) {
 
 function generalizedBuyableLogic(diff, layer, condition) {
     if (!player[layer].buyables) return;
-    
-    // Accumulate time for this layer
+
     if (!player[layer].buyableTime) player[layer].buyableTime = new Decimal(0);
     player[layer].buyableTime = player[layer].buyableTime.add(diff);
 
-    const speed = getAutoBuySpeed(layer); 
-    const tickInterval = 1 / speed; // seconds per tick
-    const bulk = buyableBulk(layer); 
+    const speed = getAutoBuySpeed(layer);
+    const tickInterval = 1 / speed;
+    const bulk = buyableBulk(layer);
 
-    // Process all ticks accumulated before
+    // Sort IDs numerically (11, 12, 13...)
+    const ids = Object.keys(layers[layer].buyables)
+        .filter(id => !isNaN(id))
+        .sort((a, b) => Number(a) - Number(b));
+
     while (player[layer].buyableTime.gte(tickInterval)) {
         player[layer].buyableTime = player[layer].buyableTime.sub(tickInterval);
 
-        for (let id in layers[layer].buyables) {
-            if (!isNaN(id)) {
-                if (condition == true) {buyAllAtOnce(layer)}else{
-                    const buyable = layers[layer].buyables[id];
-                    // Buy up to `bulk` times per tick
-                    for (let i = new Decimal(0); i.lt(bulk); i = i.add(1)) {
-                        if (buyable.canAfford?.()) {
-                            buyable.buy();
-                        } else {
-                            break;
-                        }
-                    }
+        if (condition) {
+            buyAllAtOnce(layer);
+        } else {
+            // Find the first affordable buyable
+            for (let id of ids) {
+                const buyable = layers[layer].buyables[id];
+                if (buyable.canAfford?.()) {
+                    buyable.buy();
+                    break; // only one purchase per tick
                 }
             }
         }
