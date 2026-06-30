@@ -899,7 +899,7 @@ addLayer("B", {
             done() { return player.B.points.gte(2.5e11) },
             unlocked() {return hasMilestone('B',2)},
             effectDescription(){
-                return "Reward: Generate 50% of alpha points per second, triple Alpha autobuy speed, keep second alpha row on reset, x1e10 points and unlock a new tab in beta<br>"
+                return "Reward: Generate 50% of alpha points per second, keep second alpha row on reset, x1e10 points and unlock a new tab in beta<br>"
             },
             style: {'width': '750px'},
         },

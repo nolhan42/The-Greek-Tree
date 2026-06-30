@@ -52,7 +52,7 @@ function buyableBulk(layer){
     if (layer == 'A'){
         if (hasMilestone('B', 4)) amt = amt.times(10)
         if (hasMilestone('B', 5)) amt = amt.times(3)
-        if (hasMilestone('G', 2)) amt = amt.times(5)
+        if (hasMilestone('G', 2)) amt = amt.times(3)
         if (hasMilestone('G', 5)) amt = amt.times(10)
     }
     if (layer == 'B'){
@@ -65,7 +65,8 @@ function buyableBulk(layer){
 function getAutoBuySpeed(layer){
         let mult = new Decimal(1)
         if (layer == "A") {
-            if (hasMilestone('B', 1)) mult = mult.times(3)
+            if (hasUpgrade('B', 33)) mult = mult.times(2)
+            if (hasUpgrade('G',11)) mult = mult.times(10) 
             if (hasMilestone('G', 5)) mult = mult.times(5)
             if (hasMilestone('D', 0)) mult = mult.times(player.D.resets.add(1))
         }
