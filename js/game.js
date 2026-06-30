@@ -1,5 +1,6 @@
 var player;
 var needCanvasUpdate = true;
+var resetSnapshot = null; // holds pre-reset state during a reset operation
 
 // Don't change this
 const TMT_VERSION = {
@@ -153,20 +154,6 @@ function layerDataReset(layer, keep = [], resettingLayer = null) {
 	layOver(player[layer], getStartLayerData(layer))
 	// Optionally preserve some upgrades depending on the resetting layer's milestones
 	let preservedUpgrades = []
-	if (layer == 'A' && resettingLayer && hasMilestone(resettingLayer, 0)) {
-		// preserve first-row upgrades (ids like 11,12... where first digit is 1)
-		for (let i=0;i<player[layer].upgrades.length;i++){
-			let id = Number(player[layer].upgrades[i])
-			if (Math.floor(id/10) == 1) preservedUpgrades.push(player[layer].upgrades[i])
-		}
-	}
-
-	if (layer == 'A' && resettingLayer && hasMilestone(resettingLayer, 3)) {
-		for (let i=0;i<player[layer].upgrades.length;i++){
-			let id = Number(player[layer].upgrades[i])
-			if (Math.floor(id/10) == 2) preservedUpgrades.push(player[layer].upgrades[i])
-		}
-	}
 
 	player[layer].upgrades = []
 	player[layer].milestones = []
@@ -237,6 +224,15 @@ function doReset(layer, force=false) {
 
 	player.points = (row == 0 ? decimalZero : getStartPoints())
 
+	// Snapshot current player milestones/upgrades so layer reset logic can decide
+	// based on the pre-reset state (prevents order-dependent keep logic).
+	resetSnapshot = {milestones: {}, upgrades: {}, achievements: {}}
+	for (let l in layers) {
+		resetSnapshot.milestones[l] = player[l] && player[l].milestones ? player[l].milestones.slice() : []
+		resetSnapshot.upgrades[l] = player[l] && player[l].upgrades ? player[l].upgrades.slice() : []
+		resetSnapshot.achievements[l] = player[l] && player[l].achievements ? player[l].achievements.slice() : []
+	}
+
 	for (let x = row; x >= 0; x--) rowReset(x, layer)
 	for (r in OTHER_LAYERS){
 		rowReset(r, layer)
@@ -246,6 +242,9 @@ function doReset(layer, force=false) {
 
 	updateTemp()
 	updateTemp()
+
+	// Clear the snapshot after the reset operation completes
+	resetSnapshot = null
 }
 
 function resetRow(row) {

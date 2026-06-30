@@ -289,6 +289,11 @@ function importSave(imported = undefined, forced = false) {
 		return;
 	}
 }
+
+function colorText(elem, color, text) {
+	return "<" + elem + " style='color:" + color + ";text-shadow:0px 0px 10px;'>" + text + "</" + elem + ">"
+}
+
 function versionCheck() {
 	let setVersion = true;
 

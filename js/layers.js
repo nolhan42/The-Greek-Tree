@@ -4,8 +4,9 @@ addLayer("A", {
     position: 0, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
     startData() { return {
         unlocked: true,
-		points: new Decimal(0),
-        autoTimer: 0,
+		points: decimalZero,
+        total: decimalZero,
+        buyableTime: decimalZero,
     }},
     color: "#ff0000",
     requires: new Decimal(10), // Can be a function that takes requirement increases into account
@@ -14,12 +15,12 @@ addLayer("A", {
     baseAmount() {return player.points}, // Get the current amount of baseResource
     type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
     exponent: 0.75, // Prestige currency exponent
-    branches: ["B"],
+    branches: ["B","G"],
     gainMult() { // Calculate the multiplier for main currency from bonuses
         let b22 = getBuyableAmount("A", 22)
         let b23 = getBuyableAmount("A",23)
-        let boost22 = new Decimal(1.42).pow(b22)
-        let boost23 = new Decimal(1.8).pow(b23)
+        let boost22 = new Decimal(1.42).pow(b22).max(1)
+        let boost23 = new Decimal(1.8).pow(b23).max(1)
 
         mult = new Decimal(1)
         if (hasUpgrade('A',13)) mult = mult.times(1.5)
@@ -28,70 +29,79 @@ addLayer("A", {
         if (hasUpgrade('A',24)) mult = mult.times(upgradeEffect('A',24))
         if (hasBuyable('A',12)) mult = mult.times(buyableEffect('A',12)).times(boost22)
         if (hasBuyable('A',13)) mult = mult.times(buyableEffect('A',13)).times(boost23)
+        if (hasUpgrade('A',51)) mult = mult.times(buyableEffect('A',23).pow(3))
 
-        if (hasUpgrade('B',11)) mult = mult.times(2)
         if (hasUpgrade('B',14)) mult = mult.times(upgradeEffect('B',14))
-        if (hasUpgrade('B',41)) mult = mult.times(getBuyableAmount('B',11).pow(10))
+        if (hasUpgrade('B',15)) mult = mult.times(upgradeEffect('B',15))
+        if (hasUpgrade('B',23)) mult = mult.times(25)
+        if (hasUpgrade('B',41)) mult = mult.times(upgradeEffect('B',41))
+        if (hasUpgrade('B',43)) mult = mult.times(1e25)
+        if (hasUpgrade('B',44)) mult = mult.times(upgradeEffect('B',44))
+        if (hasUpgrade('B',45)) mult = mult.times(upgradeEffect('B',45))
+        if(hasMilestone('B',4)) mult = mult.times("1e15")
 
         if (hasAchievement('ach',24)) mult = mult.times(11)
+
+        if (hasUpgrade('G',11)) mult = mult.times(3)
+        if (hasUpgrade('G',12)) mult = mult.times("1e7")
+        if (hasUpgrade('G',22)) mult = mult.times(upgradeEffect('G',22))
+        if (hasMilestone('G',5)) mult = mult.times(milestoneEffect('G',5))
         
         return mult
-    },
-    automate() {// Left intentionally light: actual timed buying handled in update(diff)
-    },
-    update(diff) {
-        // Passive alpha generation: if Beta milestone 3 is owned, generate 5% of alpha reset gain per second
-        try {
-            if (hasMilestone('B',2) && tmp && tmp.A && tmp.A.resetGain) {
-                player.A.points = player.A.points.add(tmp.A.resetGain.times(0.05).times(diff))
-            }
-            if (hasMilestone('B',3) && tmp && tmp.A && tmp.A.resetGain) {
-                player.A.points = player.A.points.add(tmp.A.resetGain.times(0.5).times(diff))
-            }
-        } catch (e) { /* defensive */ }
-
-        // Advance the autoTimer and buy one of each buyable once per second when enabled
-        try {
-            if (!(hasMilestone('B',1) && player.B && player.B.autobuyA11_13)) return
-            if (player.A.autoTimer === undefined) player.A.autoTimer = 0
-
-            let autoSpeed = 1
-            if (hasUpgrade('B',33)) autoSpeed *= 2
-            if (hasMilestone('B',3)) autoSpeed *= 3
-
-            player.A.autoTimer += diff * autoSpeed
-            while (player.A.autoTimer >= 1) {
-                // Buy each buyable once per second if affordable
-                for (let id of [11,12,13]) {
-                    if (canBuyBuyable('A', id)) {
-                        buyBuyable('A', id)
-                    break
-                }
-                }
-                player.A.autoTimer -= 1
-            }
-        } catch (e) { /* defensive: ignore if player.B undefined */ }
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
         let exp = new Decimal(1)
         try {
-            if (hasUpgrade('B',31)) exp = exp.add(new Decimal(0.015))
             if (hasUpgrade('A',35)) exp = exp.add(new Decimal(0.025))
-            if (hasUpgrade('A',41)) exp = exp.add(new Decimal(0.05))
+            if (hasUpgrade('A',41)) exp = exp.add(new Decimal(0.125))
+            if (hasUpgrade('G',23)) exp = exp.add(new Decimal(upgradeEffect('G',23)))
+            if (hasUpgrade('G',42)) exp = exp.add(upgradeEffect('G',42))
         } catch (e) {}
         return exp
+    },
+    passiveGeneration(){
+        if (hasMilestone('G',4)) return 100
+        if (player.D.resets >= 1) return 2.5
+        if (hasMilestone('B',3)) return 0.5
+        if (hasMilestone('B',2)) return 0.05 //condition ? yes : no | 5%/s
+    },
+    update(diff) {
+        let data = player.A
+
+        if (hasMilestone('B',1)) generalizedBuyableLogic(diff, this.layer, hasMilestone('G',0))  
+
+        if (data.total.gt(0)) data.unlocked = true
+    },
+    keeAutoBuy(){
+        if (hasMilestone('G',4) || hasMilestone('D',0)) {player.B.autobuyA11_13 = true}
+        if (hasMilestone('D',0)) {player.B.autobuyA21_23 = true} 
     },
     row: 0, // Row the layer is in on the tree (0 is the first row)
     hotkeys: [
         {key: "a", description: "A: Reset for alpha points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
     ],
+    doReset(resettingLayer){
+        if (layers[resettingLayer].row <= this.row) return
+
+        let keep = []
+        if (hasMilestone('B', 0) || hasMilestone('G', 1) || hasMilestone('D', 0)) keep.push(...["11","12","13","14","15"])
+        if (hasMilestone('B', 3) || hasMilestone('G', 2) || hasMilestone('D', 1)) keep.push(...["21","22","23","24","25"])
+        if (hasMilestone('B', 5) || hasMilestone('G', 3) || hasMilestone('D', 2)) keep.push(...["31","32","33","34","35"])
+        if (hasMilestone('B', 5) || hasMilestone('G', 4) || hasMilestone('D', 3)) keep.push(...["41","42","43","44","45"])
+        if (hasMilestone('G', 5)) keep.push(...["51","52","53","54","55"])
+
+        let upgrades = player.A.upgrades.filter(id => keep.includes(String(id)))
+
+        layerDataReset("A", ["upgrades"])
+        player.A.upgrades = upgrades
+    },
     layerShown(){return true},
     tabFormat: {
         "Upgrades": {
-            content: ['main-display','prestige-button','upgrades'],
+            content: ['main-display', 'prestige-button','upgrades'],
         },
         "Buyables": {
-            content: ['main-display','prestige-button','buyables'],
+            content: ['main-display','buyables'],
             unlocked(){return (hasUpgrade("A",15))}
         },
     },
@@ -101,49 +111,51 @@ addLayer("A", {
         11: {
         title: "Boost",
         description: "x2 points gain",
-        cost: new Decimal(5),
+        cost: new Decimal("5"),
         
         },
         12: {
         title: "'Re'Boost",
         description: "x2 points gain again",
-        cost: new Decimal(15),
+        cost: new Decimal("15"),
         unlocked() {return hasUpgrade('A',11)},
         },
         13: {
         title: "More Alpha",
         description: "Multiply alpha gain by 1.5",
-        cost: new Decimal(30),
+        cost: new Decimal("30"),
         unlocked() {return hasUpgrade('A',12)},
         },
         14: {
         title: "You want more ?",
         description: "alpha multiply themselves",
-        cost: new Decimal(50),
+        cost: new Decimal("50"),
         unlocked() {return hasUpgrade('A',13)},
         effect() {
-            power = 1.25
-            if (hasUpgrade('A',21)) power = 2
-            return player.A.points.add(1).log10().add(1).cbrt().pow(power)
+            let power = new Decimal(1.25)
+            let boost = new Decimal(1)
+            if (hasUpgrade('A',21)) power = 2.5
+            if (hasUpgrade('A',43)) boost = boost.mul(upgradeEffect('A',43))
+            return player.A.points.add(1).log10().add(1).cbrt().pow(power).mul(boost)
         },
         effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" }, // Add formatting to the effect
         },
         15: {
         title: "Something new ?",
         description: "Unlock a new Tab",
-        cost: new Decimal(100),
+        cost: new Decimal("100"),
         unlocked() {return hasUpgrade('A',14)},
         },
         21: {
         title: "Finally a new row",
-        description: "Change alpha upgrade 4 power effect to be better: 1.25 -> 2",
-        cost: new Decimal(2e4),
-        unlocked() {return hasUpgrade('A',21) || getBuyableAmount('A',12).gte(10)},
+        description: "Double alpha upgrade 4 power effect to be better: 1.25 -> 2.5",
+        cost: new Decimal("5e3"),
+        unlocked() {return hasUpgrade('A',15) && (getBuyableAmount('A',12).gte(5) || hasMilestone('G',2) || hasMilestone('B',3) || hasMilestone('D',1))},
         },
         22: {
         title: "Oh that's cool",
         description: "Boost alpha gain again",
-        cost: new Decimal(5e4),
+        cost: new Decimal("1e4"),
         effect() {
             return new Decimal(5)
         },
@@ -152,21 +164,31 @@ addLayer("A", {
         },
         23: {
         title: "Oh, look who is back",
-        description: "alpha point multiply points gain",
-        cost: new Decimal(7.5e5),
+        description: "alpha point multiply points gain and unlock a new Layer",
+        cost: new Decimal("5e4"),
         effect() {
             power = 1.25
-            return player.A.points.max(1).add(1).log10().pow(power)
+            return player.A.points.max(1).add(1).log10().max(1).pow(power)
         },
         effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
         unlocked() {return hasUpgrade('A',22)},
         },
         24: {
-        title: "We are so back",
-        description: "beta upgrade boost alpha point gain",
-        cost: new Decimal(1.5e10),
+        title: "Boost boost?",
+        description: "points boost themselves",
+        cost: new Decimal("5e6"),
         effect() {
-            let bUpgradeCount = new Decimal(player.B.upgrades.length)
+            return player.points.max(1).log10().add(1)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        unlocked() {return hasUpgrade('A',23)},
+        },
+        25: {
+        title: "We are so back",
+        description: "alpha upgrade boost alpha point gain",
+        cost: new Decimal("5e7"),
+        effect() {
+            let bUpgradeCount = new Decimal(player.A.upgrades.length).max(1)
 
             if (hasUpgrade('A', 32))
                 bUpgradeCount = bUpgradeCount.pow(2)
@@ -177,32 +199,22 @@ addLayer("A", {
             return bUpgradeCount
         },
         effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
-        unlocked() {return hasUpgrade('B',13) && hasUpgrade('A',23)},
-        },
-        25: {
-        title: "Boost boost?",
-        description: "points boost themselves",
-        cost: new Decimal(5e11),
-        effect() {
-            return player.points.max(1).log10().add(1)
-        },
-        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
         unlocked() {return hasUpgrade('A',24)},
         },
         31: {
         title: "Boost boost boost (seriously...)?",
         description: "points boost themselves based on alpha point",
-        cost: new Decimal(1.55e13),
+        cost: new Decimal("5e12"),
         effect() {
-            return player.points.max(1).log10().add(player.A.points.log10().sqrt(2))
+            return player.points.max(1).log10().add(player.A.points.max(1).log10().sqrt(2))
         },
         effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
-        unlocked() {return hasUpgrade('A',25)},
+        unlocked() {return (hasUpgrade('B',11) || hasMilestone('D',2)) && hasUpgrade('A',25)},
         },
         32: {
         title: "Expensive boost",
-        description: "square effect of alpha upgrade 8",
-        cost: new Decimal(7.89e21),
+        description: "square effect of alpha upgrade 10",
+        cost: new Decimal("7.89e21"),
         effect() {
             return upgradeEffect('A',24).pow(2)
         },
@@ -210,8 +222,8 @@ addLayer("A", {
         },
         33: {
         title: "Expensive boost 2",
-        description: "square effect of alpha upgrade 8 again",
-        cost: new Decimal(4.21e35),
+        description: "square effect of alpha upgrade 10 again",
+        cost: new Decimal("4.21e35"),
         effect() {
             return upgradeEffect('A',24).pow(2)
         },
@@ -220,20 +232,92 @@ addLayer("A", {
         34: {
         title: "34",
         description: "x34 point",
-        cost: new Decimal(4.22e42),
+        cost: new Decimal("3.4e50"),
         unlocked() {return hasUpgrade('A',33)},
         },
         35: {
         title: "Another exp",
         description: "Add +0.025 to alpha exp gain",
-        cost: new Decimal(8e80),
+        cost: new Decimal("8e80"),
         unlocked() {return hasUpgrade('A',34)},
         },
         41: {
         title: "Exp everywhere just for you",
-        description: "Add +0.05 to alpha exp gain",
-        cost: new Decimal(2.5e171),
-        unlocked() {return hasUpgrade('B',42) && hasUpgrade('A',35)},
+        description: "Add +0.125 to alpha exp gain",
+        cost: new Decimal("1e96"),
+        unlocked() {return (hasUpgrade('B',42) || hasMilestone('D',3)) && hasUpgrade('A',35)},
+        },
+        42: {
+        title: "Somewhere we go..",
+        description: "Add +0.33 to alpha buyable 3 original effect",
+        cost: new Decimal("1e160"),
+        unlocked() {return hasUpgrade('A',41)},
+        },
+        43: {
+        title: "Ok ?",
+        description: "Beta Boost 2 amount exponent 2 boost alpha upgrade 4 effect",
+        cost: new Decimal("1e207"),
+        unlocked() {return hasUpgrade('A',42)},
+        effect() {
+            let eff = getBuyableAmount('B',12).pow(2).max(1)
+            if (hasUpgrade('A',44)) eff = eff.mul(upgradeEffect('A',44))
+            return eff
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        44: {
+        title: "Mooooooooore",
+        description: "Bpg² effect boost the previous upgrade effect",
+        cost: new Decimal("1e211"),
+        unlocked() {return hasUpgrade('A',43)},
+        effect() {
+            return buyableEffect('A',21)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        45: {
+        title: "The last one... goodbye",
+        description: "Bap2 exponent is now 1.38",
+        cost: new Decimal("2.81e281"),
+        unlocked() {return hasUpgrade('A',44)},
+        },
+        51: {
+        title: "Or was it ?",
+        description: "Bapg2² effect ^3 boost alpha and Bap2 add to Bap",
+        cost: new Decimal("1e465"),
+        unlocked() {return hasUpgrade('A',45) && hasUpgrade('G',11)},
+        effect() {
+            return buyableEffect('A',23).pow(3)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        52: {
+        title: "Gamma power !",
+        description: "Gamma upgrade^52 boost beta",
+        cost: new Decimal("1e560"),
+        unlocked() {return hasUpgrade('A',51)},
+        effect() {
+            return getUpgradeCount('G').pow(52).max(1)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        53: {
+        title: "Expo-gone",
+        description: "Bap exponent is now 1.25",
+        cost: new Decimal("1e568"),
+        unlocked() {return hasUpgrade('A',52)},
+        },
+        54: {
+        title: "From buyable to... buyable",
+        description: "Bapg2² add to Bapg2",
+        cost: new Decimal("1e1150"),
+        unlocked() {return hasUpgrade('A',53)},
+        },
+        55: {
+        title: "Everything as an end",
+        description: "Bapg2² exp is 2.25",
+        cost: new Decimal("1e1750"),
+        unlocked() {return hasUpgrade('A',54)},
         },
     },
     buyables: {
@@ -244,36 +328,20 @@ addLayer("A", {
         cost(x) {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
+        
 
-            const base = new Decimal(100) //Basecose
-
-            if (x.lt(19))
-                return base.mul(new Decimal(1.1).pow(x))//Multiplier = 1.1
-
-            let costAt20 = base.mul(new Decimal(1.1).pow(19))
-
-            if (x.lt(99))
-                return costAt20.mul(new Decimal(2.5).pow(x.sub(19)))//Multiplier = 2.5
-
-            let costAt100 = costAt20.mul(new Decimal(2.5).pow(99 - 19))
-
-            if (x.lt(199))
-                return costAt100.mul(new Decimal(14).pow(x.sub(99)))//Multiplier = 14
-
-            let costAt200 = costAt100.mul(new Decimal(14).pow(199 - 99))
-
-
-            return costAt200.mul(new Decimal(788).pow(x.sub(199))) //New Multiplier
+            const base = new Decimal(100)
+            return base.mul(new Decimal(1.015).pow(x.pow(1.5))) // base*1.015^(x^1.5)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let originaleffect = new Decimal(100)
-            if (hasUpgrade('B',35)) originaleffect = originaleffect.add(100000)
-            if (hasUpgrade('B',22)) originaleffect = originaleffect.mul(player.B.upgrades.length)
-            let out = `+` + format(originaleffect) + `% points gain.<br> <b>Cost:</b>` + format(this.cost()) + ' alpha points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(15)) out += '<br> <b> Need 15 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(100)
+            if (hasUpgrade('B',35)) oeff = oeff.add(1e5)
+            if (hasUpgrade('B',22)) oeff = oeff.mul(player.B.upgrades.length)
+            
+            //TEXT//
+            let desc = '+'+format(oeff)+'% points.<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n'  
+            return desc + cost + buyableArrangement(this.layer, this.id, 10)//if not null, null, x --> option : condition|bonusAmount|sign
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         buy() {
@@ -295,88 +363,79 @@ addLayer("A", {
             x = new Decimal(x)
 
             const base = new Decimal(500)
-
-            if (x.lt(19))
-                return base.mul(new Decimal(1.5).pow(x))
-
-            let costAt20 = base.mul(new Decimal(1.5).pow(19))
-
-            if (x.lt(49))
-                return costAt20.mul(new Decimal(2.8).pow(x.sub(19)))
-
-            let costAt50 = costAt20.mul(new Decimal(2.8).pow(49 - 19))
-
-            if (x.lt(149))
-                return costAt50.mul(new Decimal(29).pow(x.sub(49)))
-
-            let costAt150 = costAt50.mul(new Decimal(29).pow(149 - 49))
-
-            return costAt150.mul(new Decimal(2.178e3).pow(x.sub(149)))
+            let power = new Decimal(1.5)
+            if (hasUpgrade('A',53)) power = new Decimal(1.25)
+            return base.mul(new Decimal(1.25).pow(x.pow(power)))//1.25^(x^1.5)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let text = 'x1.2 alpha points.<br> <b>Cost:</b>'
-            if (hasUpgrade('B',34)) text = 'x1.25 alpha points.<br> <b>Cost:</b>'
-            let out = text + format(this.cost()) + ' alpha points' + `\n            
-                <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(15)) out += '<br> <b> Need 15 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(1.2)
+            if (hasMilestone('G',6)) oeff  = oeff .add(0.1)
+            if (hasUpgrade('B',34)) oeff  = oeff  = oeff .add(0.02)
+            if (hasBuyable('B',13)) oeff = oeff .add(buyableEffect('B',13))
+            
+            //TEXT//
+            let desc = 'x'+format(oeff)+' alpha points.<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n'
+            let bonus = hasUpgrade('A', 51) ? getBuyableAmount('A', 13) : null
+            return desc + cost + buyableArrangement(this.layer, this.id, 10, {bonusAmount: bonus})
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
-        unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(15))},
+        unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(10))},
         buy() {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
-            oeff = new Decimal(1.2)
-            if (hasUpgrade('B',34)) oeff = oeff.add(0.05)
-            if (hasBuyable('A',22)) return oeff.pow(x).mul(buyableEffect('A',22))
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('A', 51)) y = getBuyableAmount('A', 13)
+
+            let oeff = new Decimal(1.2)
+            if (hasUpgrade('B', 34)) oeff = oeff.add(0.02)
+            if (hasBuyable('B', 13)) oeff = oeff.add(buyableEffect('B', 13))
+            if (hasMilestone('G', 6)) oeff = oeff.add(0.1)
+
+            x = x.add(y) //Add the 2 ammount to effect
+
+            if (hasBuyable('A', 22)) return oeff.pow(x).mul(buyableEffect('A', 22))
             return oeff.pow(x)
         },
         },
         13: {
         title: "Boost alpha points 2 <br>",
-        //cost(x){return new Decimal(1.75e5).mul(new Decimal(1.83).pow(x)) },
         cost(x) {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(1.75e5)
-
-            if (x.lt(19))
-                return base.mul(new Decimal(1.83).pow(x))
-
-            let costAt20 = base.mul(new Decimal(1.83).pow(19))
-
-            if (x.lt(49))
-                return costAt20.mul(new Decimal(4).pow(x.sub(19)))
-
-            let costAt50 = costAt20.mul(new Decimal(4).pow(49 - 19))
-
-            if (x.lt(124))
-                return costAt50.mul(new Decimal(61).pow(x.sub(49)))
-
-            let costAt125 = costAt50.mul(new Decimal(61).pow(124 - 49))
-
-            return costAt125.mul(new Decimal(5.963e3).pow(x.sub(124)))
+            let base = new Decimal(5e5)
+            let power = new Decimal(1.5)
+            if (hasUpgrade('A',45)) power = new Decimal(1.38)
+            return base.mul(new Decimal(2).pow(x.pow(power)))//1.25^(x^1.5)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x1.67 alpha points.<br> <b>Cost:</b>` + format(this.cost()) + ' alpha points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (hasUpgrade('B',13))
-                if (amt.lt(20)) out += '<br> <b> Need 20 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(1.67) 
+            if (hasMilestone('D',0)) oeff = oeff.add(0.05)
+            if (hasUpgrade('A',42)) oeff =  oeff.add(0.33)
+
+            //TEXT//
+            let desc = 'x'+format(oeff)+' alpha points.<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n' 
+            let show = 'yes'
+            if (hasUpgrade('B',11)) show = null
+            return desc + cost + buyableArrangement(this.layer, this.id, 15, {condition: show})
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
-        unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(15))},
+        unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(10))},
         buy() {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
             oeff = new Decimal(1.67)
+            if (hasMilestone('D',0)) oeff = oeff.add(milestoneEffect('D',0))
+            if (hasUpgrade('A',42)) oeff =  oeff.add(0.33)
             if (hasBuyable('A',23)) return oeff.pow(x).mul(buyableEffect('A',23))
             return oeff.pow(x)
         },
@@ -387,29 +446,18 @@ addLayer("A", {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(2e14)
+            const base = new Decimal(1e25)
 
-            if (x.lt(29))
-                return base.mul(new Decimal(2.5).pow(x))
-
-            let costAt30 = base.mul(new Decimal(2.5).pow(29))
-
-            if (x.lt(99))
-                return costAt30.mul(new Decimal(6).pow(x.sub(29)))//Multiplier
-
-            let costAt100 = costAt30.mul(new Decimal(6).pow(99 - 29))
-
-            return costAt100.mul(new Decimal(50).pow(x.sub(99)))//Multiplier
+            return base.mul(new Decimal(1.1).pow(x.pow(2))) // base*1.1^(x^2)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x1.25 to Buyables 1 boosts.<br> <b>Cost:</b>` + format(this.cost()) + ' alpha points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(20)) out += '<br> <b> Need 20 buyable to unlock the next one.</b>'
-            return out
+            //TEXT//
+            let desc = 'x1.25 to buyable 1 boost.<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n' 
+            return desc + cost + buyableArrangement(this.layer, this.id, 20)
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
-        unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(20))},
+        unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(15)) && hasUpgrade('B',11)},
         buy() {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
@@ -422,26 +470,18 @@ addLayer("A", {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(1e25)
-
-            if (x.lt(19))
-                return base.mul(new Decimal(4.87).pow(x))
-
-            let costAt20 = base.mul(new Decimal(4.87).pow(19)) //Multiplier
-
-            if (x.lt(74))
-                return costAt20.mul(new Decimal(15.9).pow(x.sub(19)))
-
-            let costAt75 = costAt20.mul(new Decimal(15.9).pow(74 - 19)) //Muliplier
-
-            return costAt75.mul(new Decimal(185).pow(x.sub(74)))
+            const base = new Decimal(1e45)
+            return base.mul(new Decimal(1.25).pow(x.pow(2))) // base*1.25^(x^2))
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x1.42 to Buyables 2 boosts.<br> <b>Cost:</b>` + format(this.cost()) + ' alpha points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(30)) out += '<br> <b> Need 30 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(1.42)
+            if (hasBuyable('B',21)) oeff = format(oeff.add(buyableEffect('B',21)))
+
+            //TEXT//
+            let desc = 'x'+oeff+' alpha points<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n'
+            let bonus = hasUpgrade('A', 54) ? getBuyableAmount('A', 23) : null 
+            return desc + cost + buyableArrangement(this.layer, this.id, 30, {bonusAmount: bonus})
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,21).gte(new Decimal(20))},
@@ -449,7 +489,15 @@ addLayer("A", {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
-        effect(x) {return new Decimal(1.42).pow(x)},
+        effect(x) {
+            let oeff = new Decimal(1.42)
+            if (hasBuyable('B',21)) oeff = oeff.add(buyableEffect('B',21))
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('A', 54)) y = getBuyableAmount('A', 23)
+            x = x.add(y)
+            return oeff.pow(x)
+        },
         },
         23: {
         title: "Boost alpha points gain 2² <br>",
@@ -457,26 +505,20 @@ addLayer("A", {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(1e60)
-
-            if (x.lt(14))
-                return base.mul(new Decimal(8.8).pow(x))//New Muliplier
-
-            let costAt15 = base.mul(new Decimal(8.8).pow(14)) 
-
-            if (x.lt(44))
-                return costAt15.mul(new Decimal(30).pow(x.sub(14)))//New Muliplier
-
-            let costAt45 = costAt15.mul(new Decimal(30).pow(44 - 14))
-
-            return costAt45.mul(new Decimal(460).pow(x.sub(44)))
+            let base = new Decimal(1e145)
+            let power = new Decimal(2.5)
+            if (hasUpgrade('A',55)) power = new Decimal(2.25)
+            return base.mul(new Decimal(1.45).pow(x.pow(power)))
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x1.8 to Buyables 3 boosts.<br> <b>Cost:</b>` + format(this.cost()) + ' alpha points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            // if (amt.lt(50)) out += '<br> <b> Need 50 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(1.8)
+            if (hasUpgrade('G',44)) oeff = oeff.add(0.025)
+
+            //TEXT//
+            let desc = 'x'+oeff+' alpha points<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' alpha points \n'
+            let bonus = hasUpgrade('B', 53) ? getBuyableAmount('B', 12) : null
+            return desc + cost + buyableArrangement(this.layer, this.id, 0, {bonusAmount: bonus})
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,22).gte(new Decimal(30))},
@@ -484,189 +526,18 @@ addLayer("A", {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
-        effect(x) {return new Decimal(1.8).pow(x)},
+        effect(x) {
+            oeff = new Decimal(1.8)
+            if (hasUpgrade('A',42)) oeff = oeff.add(0.2)
+            if (hasUpgrade('G',44)) oeff = oeff.add(0.025)
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('B', 53)) y = getBuyableAmount('B', 12)
+            x = x.add(y)
+            return oeff.pow(x)},
         },
     },
 })
-
-addLayer("ach", {
-    name: "achievements", // This is optional, only used in a few places, If absent it just uses the layer id.
-    symbol: "🏆", // This appears on the layer's node. Default is the id with the first letter capitalized
-    position: 0, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
-    startData() { return {
-        unlocked: true,
-		points: new Decimal(0),
-    }},
-    color: "#FFFF00",
-    nodeStyle() {return {
-        "background": "radial-gradient(#FFFF00, #dce28a)" ,
-    }},
-    requires: new Decimal(10), // Can be a function that takes requirement increases into account
-    resource: "achievements points", // Name of prestige currency
-    baseResource: "achievementspoints", // Name of resource prestige is based on
-    baseAmount() {return player.ach.points}, // Get the current amount of baseResource
-    type: "none", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
-    exponent: 0.75, // Prestige currency exponent
-    row: 'side', // Row the layer is in on the tree (0 is the first row)
-    layerShown(){return true},
-    tabFormat: {
-        "Achievements": {
-            content: ['main-display','achievements'],
-        },
-        "Milestones": {
-            content: ['milestones'],
-        },
-    },
-    achievements: {
-        rows: 3,
-        cols: 6,
-        11: {
-            name: "Let's start",
-            tooltip: "Get 1 alpha point. Reward: 1 AP.",
-            done() {
-                return player.A.points.gte(1)
-            },
-            onComplete() {
-                addPoints("ach",1)
-            }
-        },
-        12: {
-            name: "Nice",
-            tooltip: "Get 1 alpha upgrade. Reward: 1 AP.",
-            done() {
-                return player.A.upgrades.length > 0
-            },
-            onComplete() {
-                addPoints("ach",1)
-            }
-        },
-        13: {
-            name: "No way you got 4 digits !",
-            tooltip: "Get 1000 alpha points. Reward: 1 AP.",
-            done() {
-                return player.A.points.gte(1000)
-            },
-            onComplete() {
-                addPoints("ach",1)
-            }
-        },
-        14: {
-            name: "Enough boost ?",
-            tooltip: "Get 10 Bap(Buyable 2). Reward: 2 AP.",
-            done() {
-                return getBuyableAmount('A',12).gte(10)
-            },
-            onComplete() {
-                addPoints("ach",2)
-            }
-        },
-        15: {
-            name: "1M ?????",
-            tooltip: "Get 1M alpha points. Reward: 2 AP.",
-            done() {
-                return player.A.points.gte(1e6)
-            },
-            onComplete() {
-                addPoints("ach",2)
-            }
-        },
-        16: {
-            name: "Wait... what is this thing ?",
-            tooltip: "Unlock a New Layer. Reward: 3 AP.",
-            done() {
-                return player.A.points.gte(1e9)
-            },
-            onComplete() {
-                addPoints("ach",3)
-            }
-        },
-        21: {
-            name: "That's more than us...",
-            tooltip: "Get 1e10 alpha points. Reward: 5 AP.",
-            done() {
-                return player.A.points.gte(1e10)
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",5)
-            }
-        },
-        22: {
-            name: "Are we really going further ?",
-            tooltip: "Get 4 beta upgrades. Reward: 5 AP.",
-            done() {
-                return player.B.upgrades.length >= 4
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",5)
-            }
-        },
-        23: {
-            name: "Is that a gift ?",
-            tooltip: "Get 2 beta milestone. Reward: 7 AP. | And x23 points gain.",
-            done() {
-                return hasMilestone('B',1)
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",7)
-            }
-        },
-        24: {
-            name: "Second gift because I don't have ideas",
-            tooltip: "Get 10 beta upgrades. Reward: 7 AP. | And x11 alpha gain.",
-            done() {
-                return player.B.upgrades.length >= 10
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",7)
-            }
-        },
-        25: {
-            name: "1De...",
-            tooltip: "Get 1e33 alpha points. Reward: 7 AP",
-            done() {
-                return player.A.points.gte(1e33)
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",7)
-            }
-        },
-        26: {
-            name: "Oh ?",
-            tooltip: "Get 1 Beta Boost Reward: 8 AP",
-            done() {
-                return getBuyableAmount('B',11) >= 1
-            },
-            unlocked() {return hasAchievement('ach',16)},
-            onComplete() {
-                addPoints("ach",8)
-            }
-        },
-        31: {
-            name: "...",
-            tooltip: "... Reward: 10 AP",
-            done() {
-                return getBuyableAmount('B',11) >= 10000000000
-            },
-            unlocked() {return hasAchievement('ach',26)},
-            onComplete() {
-                addPoints("ach",10)
-            }
-        },
-    },
-    milestones: {
-        0: {
-            requirementDescription: "... Achievements points",
-            effectDescription: "...",
-            done() { return player.ach.points.gte(5000) },
-            style: {'width': '750px'},
-        },
-    },
-}),
 
 addLayer("B", {
     name: "beta", // This is optional, only used in a few places, If absent it just uses the layer id.
@@ -675,43 +546,99 @@ addLayer("B", {
     startData() { return {
         unlocked: false,
         	points: new Decimal(0),
-        	autobuyA11_13: false,
+            total: new Decimal(0),
+            buyableTime: decimalZero,
     }},
     // Prevent the layer from being permanently unlocked by a prestige
-    color: "#2600fc",
+    color: "#1663f1",
     requires: new Decimal(1e9), // Can be a function that takes requirement increases into account
     resource: "beta points", // Name of prestige currency
     baseResource: "alpha points", // Name of resource prestige is based on
-    baseAmount() {return player.A.points}, // Get the current amount of baseResource
+    baseAmount() {return player.A.points.floor()}, // Get the current amount of baseResource
     type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
-    exponent: 0.1, // Prestige currency exponent
+    exponent: 0.15, // Prestige currency exponent
+    branches: ["G"],
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
+        if (hasUpgrade('A',52)) mult = mult.times(upgradeEffect('A',52))
+
         if (hasUpgrade('B',21)) mult = mult.times(2)
-        if (hasUpgrade('B',23)) mult = mult.times(3)
+        if (hasUpgrade('B',23)) mult = mult.times(5)
+        if (hasMilestone('B',1)) mult = mult.times(25)
         if (hasUpgrade('B',32)) mult = mult.times(upgradeEffect('B',32))
         if (hasUpgrade('B',33)) mult = mult.times(5)
-        if (hasBuyable(this.layer,11)) mult = mult.times(buyableEffect('B',11))
-        if (hasBuyable(this.layer,12)) mult = mult.times(buyableEffect('B',12))
+        if (hasBuyable('B',11)) mult = mult.times(buyableEffect('B',11))
+        if (hasBuyable('B',12)) mult = mult.times(buyableEffect('B',12))
+        if (hasUpgrade('B',43)) mult = mult.times(2.5e4)
+        if (hasMilestone('B',5)) mult = mult.times(player.G.total.pow(2))
+        if (hasUpgrade('B',54)) mult = mult.times(upgradeEffect('B',54))
+
+        if (hasUpgrade('G',11)) mult = mult.times(2)
+        if (hasUpgrade('G',12)) mult = mult.times(1e3)
+        if (hasMilestone('G',4)) mult = mult.times(milestoneEffect('G',4))
+
+        if (hasMilestone('D',1)) mult = mult.times(milestoneEffect('D',1).betaExp)
+        if (hasMilestone('D',5)) mult = mult.times(player.D.duplicates.pow(11)).max(1)
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
-        return new Decimal(1)
+        let exp = new Decimal(1)
+        try {
+            if (hasUpgrade('B',55)) exp = exp.add(1)
+            if (hasUpgrade('G',43)) exp = exp.add(0.05)
+            if (hasMilestone('G',6)) exp = exp.add(0.1)
+        } catch (e) {}
+        return exp
+    },
+    passiveGeneration(){
+        if (hasMilestone('D',2)) return 2.5
+        if (hasMilestone('G',4)) return 2 //200%
+        if (hasMilestone('G',0)) return 0.075 //7.5%
+    },
+    doReset(resettingLayer) {
+        if (layers[resettingLayer].row < this.row || resettingLayer == this.layer) {return}
+
+        // Save B
+        let keepB = []
+        if (hasMilestone('D', 2) || hasMilestone('G', 1)) keepB.push(...["11","12","13","14","15"])
+        if (hasMilestone('D', 3) || hasMilestone('G', 2)) keepB.push(...["21","22","23","24","25"])
+        if (hasMilestone('G', 3)) keepB.push(...["31","32","33","34","35"])
+        if (hasMilestone('G', 4)) keepB.push(...["41","42","43","44","45"])
+        if (hasMilestone('G', 5)) keepB.push(...["51","52","53","54","55"])
+
+        let keepB2 = []
+        if (hasMilestone('G', 3)) keepB2.push("0")
+        if (hasMilestone('G', 4)) keepB2.push("1")
+        if (hasMilestone('G', 5)) keepB2.push("2")
+        if (hasMilestone('G', 6)) keepB2.push("3")
+
+        let bUpgrades = player.B.upgrades.filter(id => keepB.includes(String(id)))
+        let bMilestones = player.B.milestones.filter(id => keepB2.includes(String(id)))
+
+        layerDataReset('B')
+
+        // Restore
+        player.B.upgrades = bUpgrades
+        player.B.milestones = bMilestones
+    },
+    update(diff){
+        let data = player.B
+
+         if (hasMilestone('G',3)) {generalizedBuyableLogic(diff, this.layer, null)}
+
+        if (player.G.layerShown) data.unlocked = true
     },
     row: 1, // Row the layer is in on the tree (0 is the first row)
     hotkeys: [
         {key: "b", description: "B: Reset for Beta points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
     ],
-    layerShown() {
-        if (player.A.points.gte(1e8)) player.B.unlocked = true
-        return player.B.unlocked
-    },
+    layerShown() {return hasUpgrade('A',23) || player.B.unlocked},
     tabFormat: {
         "Upgrades": {
             content: ['main-display','prestige-button','upgrades'],
         },
         Milestones: {
-            content: ['milestones'],
+            content: ['maindisplay', 'milestones'],
         },
         Buyables: {
             content: ['main-display','prestige-button','buyables'],
@@ -723,7 +650,7 @@ addLayer("B", {
         cols: 5,
         11: {
         title: "And it's beta !",
-        description: "x2 alpha gain",
+        description: "x2 point gain and Unlock more alpha upgrades & buyables",
         cost: new Decimal(1),
         effect() {
             let eff = new Decimal(2)
@@ -732,7 +659,7 @@ addLayer("B", {
                 eff = eff.mul(upgradeEffect('B', 14))
 
             if (hasUpgrade('B', 24))
-                eff = eff.pow(1.05)
+                eff = eff.pow(3)
 
             return eff
         },
@@ -744,19 +671,23 @@ addLayer("B", {
         12: {
         title: "Woohoo !",
         description: "x5 points gain",
-        cost: new Decimal(1),
+        cost: new Decimal("1"),
         unlocked() {return hasUpgrade('B',11)},
         },
         13: {
         title: "And yes it's not the end :)",
-        description: "Unlock more alpha upgrades & buyables",
-        cost: new Decimal(3),
+        description: "x10 points",
+        cost: new Decimal("3"),
         unlocked() {return hasUpgrade('B',12)},
+        effect(){
+            return new Decimal(10)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
         },
         14: {
         title: "2",
         description: "Each upgrade in this row double beta upgrade 1 effect",
-        cost: new Decimal(15),
+        cost: new Decimal("15"),
         unlocked() {return hasUpgrade('B',13)},
         effect() {
             // Count owned upgrades in the first row (11..15)
@@ -766,15 +697,15 @@ addLayer("B", {
             let base = hasUpgrade('B',11) ? new Decimal(1) : new Decimal(1)
             // For each owned upgrade in the row, multiply the base effect by 2
             // Result = base * (2^count)
-            if (hasUpgrade('B',25)) return  base.times(new Decimal(2).pow(count)).pow(1.1)
+            if (hasUpgrade('B',25)) return  base.times(new Decimal(2).pow(count)).pow(2)
             return base.times(new Decimal(2).pow(count))
         },
         effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
         },
         15: {
         title: "10 + Log boost ?",
-        description: "Log10() + 10 of point boost itself",
-        cost: new Decimal(30),
+        description: "Log10() + 10 of point boost itself and alpha",
+        cost: new Decimal("50"),
         unlocked() {return hasUpgrade('B',14)},
         effect() {
             return player.points.max(1).log10().add(11)
@@ -784,43 +715,47 @@ addLayer("B", {
         21: {
         title: "Finally a beta boost upgrade",
         description: "boost beta gain by 2",
-        cost: new Decimal(45),
+        cost: new Decimal("150"),
         unlocked() {return hasUpgrade('B',15)},
         },
         22: {
         title: "Buyable points boost boost",
         description: "total beta upgrade boost alpha buyable 1 original effect",
-        cost: new Decimal(150),
+        cost: new Decimal("350"),
         unlocked() {return hasUpgrade('B',21)},
+        effect(){
+            return player.B.upgrades.length
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
         },
         23: {
-        title: "Another beta boost for you",
-        description: "boost beta gain by 3",
-        cost: new Decimal(500),
+        title: "Another boost for you",
+        description: "boost beta gain by 5 and alpha by 25",
+        cost: new Decimal("750"),
         unlocked() {return hasUpgrade('B',22)},
         },
         24: {
-        title: "exp",
-        description: "add +0.05 exp to beta upgrade 1",
-        cost: new Decimal(1.25e3),
+        title: "Exponent",
+        description: "^3 to beta upgrade 1 effect",
+        cost: new Decimal("3e3"),
         unlocked() {return hasUpgrade('B',23)},
         },
         25: {
-        title: "More exp",
-        description: "add +0.1 exp to beta upgrade 4",
-        cost: new Decimal(1.5e3),
+        title: "More exponent",
+        description: "^2 to beta upgrade 4 effect",
+        cost: new Decimal("2.5e5"),
         unlocked() {return hasUpgrade('B',24)},
         },
         31: {
-        title: "Alphaxponent",
-        description: "Add +0.015 to alpha exp gain",
-        cost: new Decimal(5e3),
+        title: "Point exponent",
+        description: "Add +0.15 to point exp gain",
+        cost: new Decimal("1.5e8"),
         unlocked() {return hasUpgrade('B',25)},
         },
         32: {
-        title: "Milestone boost",
-        description: "Milestone boost beta gain",
-        cost: new Decimal(7.17e6),
+        title: "Achievement boost",
+        description: "Achievements boost beta gain",
+        cost: new Decimal("2.5e9"),
         unlocked() {return hasUpgrade('B',31)},
         effect() {
             return player.ach.achievements.length
@@ -830,68 +765,169 @@ addLayer("B", {
         33: {
         title: "More Autobuy",
         description: "Double buyable autobuy speed and x5 beta gain",
-        cost: new Decimal(3e7),
+        cost: new Decimal("1e11"),
         unlocked() {return hasUpgrade('B',32)},
         },
         34: {
         title: "Hmmm",
-        description: "alpha buyable 2 is stronger by +0.05",
-        cost: new Decimal(5e8),
+        description: "alpha buyable 2 is stronger by +0.02",
+        cost: new Decimal("5e14"),
         unlocked() {return hasUpgrade('B',33)},
         },
         35: {
         title: "Interesting",
         description: "add +100000% to alpha buyable 1 base",
-        cost: new Decimal(1.5e13),
+        cost: new Decimal("1e15"),
         unlocked() {return hasUpgrade('B',34)},
         },
         41: {
         title: "Here is the help you ordered sir",
         description: "Beta Boost amount^10 boost alpha gain",
-        cost: new Decimal(8e16),
+        cost: new Decimal("2e16"),
         unlocked() {return getBuyableAmount('B',11) >= 5 && hasUpgrade('B',35)},
+        effect(){
+            return getBuyableAmount('B',11).pow(10).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
         },
         42: {
         title: "More upgrade sir ?",
         description: "Unlock more alpha upgrade",
-        cost: new Decimal(2.5e22),
+        cost: new Decimal("2.5e22"),
         unlocked() {return hasUpgrade('B',41)},
+        },
+        43: {
+        title: "Betalpha test",
+        description: "x25000 beta points et 1e25 alpha points",
+        cost: new Decimal("3e27"),
+        unlocked() {return hasUpgrade('B',42)},
+        },
+        44: {
+        title: "From Buyable",
+        description: "alpha Buyable 1 amount^4 boost point gain",
+        cost: new Decimal("1e48"),
+        unlocked() {return hasUpgrade('B',43)},
+        effect(){
+            return getBuyableAmount('A',11).pow(4).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
+        },
+        45: {
+        title: "From Buyable but better",
+        description: "alpha Buyable 3 amount^12 boost alpha gain",
+        cost: new Decimal("1e60"),
+        unlocked() {return hasUpgrade('B',44)},
+        effect(){
+            return getBuyableAmount('A',13).pow(12).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
+        },
+        51: {
+        title: "Pointable",
+        description: "Beta Boost effect boost points",
+        cost: new Decimal("1e122"),
+        unlocked() {return hasUpgrade('B',45) && hasUpgrade('G',11)},
+        effect(){
+            let val = buyableEffect('B',11)
+            if (hasUpgrade('B',52)) val = val.mul(upgradeEffect('B',52))
+            return val
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
+        },
+        52: {
+        title: "Beta Milestone",
+        description: "Beta milestone boost^10 boost previous upgrade effect",
+        cost: new Decimal("5e315"),
+        unlocked() {return hasUpgrade('B',51)},
+        effect(){
+            return getMilestoneCount('B').pow(10)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
+        },
+        53: {
+        title: "Betaphable",
+        description: "BB2 add to bapg2²",
+        cost: new Decimal("1e335"),
+        unlocked() {return hasUpgrade('B',52)},
+        },
+        54: {
+        title: "G^54",
+        description: "Gamma upgrade^54 boost beta",
+        cost: new Decimal("1e470"),
+        unlocked() {return hasUpgrade('B',53)},
+        effect(){
+            return getUpgradeCount('G').pow("54")
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x" }
+        },
+        55: {
+        title: "Beta_givingExp.exe",
+        description: "Give beta gain +1 exp",
+        cost: new Decimal("1e535"),
+        unlocked() {return hasUpgrade('B',54)},
         },
     },
     milestones: {
         0: {
-            requirementDescription: "Require : 10 Beta points",
-            effectDescription: "Keep the first row of alpha upgrade on reset.",
+            requirementDescription: "Require : 10 Beta points (1)",
             done() { return player.B.points.gte(10) },
+            effectDescription(){
+                return "Reward: Keep the first row of alpha upgrade on reset<br>"
+            },
             style: {'width': '750px'},
         },
         1: {
-            requirementDescription: "Require : 250 Beta points",
-            effectDescription: "Autobuy the first row of alpha buyable (1/s).",
-            done() { return player.B.points.gte(250) },
-            toggles: [["B","autobuyA11_13"]],
+            requirementDescription: "Require : 5e3 Beta points (2)",
+            done() { return player.B.points.gte(5e3) },
             unlocked() {return hasMilestone('B',0)},
+            effectDescription(){
+                return "Reward: Autobuy alpha buyables (1/s), and x25 beta gain <br>"
+            },
             style: {'width': '750px'},
         },
         2: {
-            requirementDescription: "Require : 2500 Beta points",
-            effectDescription: "Generate 5% of alpha points per second",
-            done() { return player.B.points.gte(2500) },
+            requirementDescription: "Require : 1e6 Beta points (3)",
+            done() { return player.B.points.gte(1e6) },
             unlocked() {return hasMilestone('B',1)},
+            effectDescription(){
+                return "Reward: Generate 5% of alpha points per second<br>"
+            },
             style: {'width': '750px'},
         },
         3: {
-            requirementDescription: "Require : 5e13 Beta points",
-            effectDescription: "Generate 50% of alpha points per second, triple buyable autobuy speed, keep second alpha row on reset, x1e10 points and unlock a new tab in beta",
-            done() { return player.B.points.gte(5e13) },
+            requirementDescription: "Require : 2.5e11 Beta points (4)",
+            done() { return player.B.points.gte(2.5e11) },
             unlocked() {return hasMilestone('B',2)},
+            effectDescription(){
+                return "Reward: Generate 50% of alpha points per second, triple Alpha autobuy speed, keep second alpha row on reset, x1e10 points and unlock a new tab in beta<br>"
+            },
             style: {'width': '750px'},
         },
         4: {
-            requirementDescription: "Require : 5e39 Beta points",
-            effectDescription: "?",
-            done() { return player.B.points.gte(5e39) },
+            requirementDescription: "Require : 1e65 Beta points (5)",
+            done() { return player.B.points.gte("1e65") },
             unlocked() {return hasMilestone('B',3)},
+            effectDescription(){
+                return "Reward: x10 bulkA, generate 500% of alpha per second, x4e15 alpha points and unlock a new Layer<br>"
+            },
+            style: {'width': '750px'},
+        },
+        5: {
+            requirementDescription: "Require : 1e260 Beta points (6)",
+            done() { return player.B.points.gte("1e260") },
+            unlocked() {return hasMilestone('B',4) && player.G.upgrades.length >= 1},
+            effect(){
+                let eff = player.G.total.pow(2).max(1)
+
+                if (eff.gte("1e200")) eff = new Decimal("1e200").mul(player.G.total.pow(0.1))
+                return eff
+            },
+            effectDescription(){
+                let cap = ""
+                let a = "Reward: Keep third and fourth alpha row on reset, x3 bulkA and total gamma^2 boost beta<br>"
+                if (milestoneEffect('B',5).gte("1e200")) cap = " (Capped)"
+                return a + "Currently: x" + format(milestoneEffect('B',5))+cap
+            },
             style: {'width': '750px'},
         },
     },
@@ -904,21 +940,20 @@ addLayer("B", {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(1e15) //Basecose
-
-           if (x.lt(14))
-                return base.mul(new Decimal(2).pow(x))
-
-            let costAt15 = base.mul(new Decimal(2).pow(14)) //Multiplier = 2
-
-            return costAt15.mul(new Decimal(7.85).pow(x.sub(14)))
+            const base = new Decimal(1e13) //Basecose
+            let multi = new Decimal(1.2)
+            if (hasUpgrade('D',16)) multi = new Decimal(1.05)
+            return base.mul(new Decimal(multi).pow(x.pow(1.5))) // base*1.2^(x^1.5)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x1.5 beta points gain.<br> <b>Cost:</b>` + format(this.cost()) + ' beta points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(20)) out += '<br> <b> Need 20 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(1.5)
+            if (hasUpgrade('G',43)) oeff = oeff.add(0.25)
+            if (hasUpgrade('G',21)) oeff = oeff.add(upgradeEffect('G',21))
+
+            //TEXT//
+            let desc = 'x'+format(oeff)+' beta points<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n' 
+            return desc + cost + buyableArrangement(this.layer, this.id, 20)
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return hasMilestone(this.layer, 3)},
@@ -926,7 +961,11 @@ addLayer("B", {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
-         effect(x) {return new Decimal(1.5).pow(x)},
+        effect(x) { 
+            let oeff = new Decimal(1.5)
+            if (hasUpgrade('G',21)) oeff = oeff.add(upgradeEffect('G',21))
+            if (hasUpgrade('G',43)) oeff = oeff.add(0.25)
+            return oeff.pow(x)},
         },
         12: {
         title: "Beta Boost 2 <br>",
@@ -934,21 +973,21 @@ addLayer("B", {
             if (x === undefined) x = getBuyableAmount(this.layer, this.id)
             x = new Decimal(x)
 
-            const base = new Decimal(5e24) //Basecose
-
-           if (x.lt(14))
-                return base.mul(new Decimal(12).pow(x))
-
-            let costAt15 = base.mul(new Decimal(12).pow(14)) //Multiplier = 12
-
-            return costAt15.mul(new Decimal(19).pow(x.sub(14)))
+            const base = new Decimal(1e20) //Basecose
+            let power = new Decimal(2)
+            let multi = new Decimal(1.75)
+            if (hasMilestone('G',2)) power = power.sub(milestoneEffect('G',2))
+            if (hasUpgrade('G',35)) multi = new Decimal(1.5)
+            return base.mul(multi.pow(x.pow(power))) // base*1.75^(x^2)
         },
         display() {
-            let amt = getBuyableAmount(this.layer, this.id)
-            let out = `x3 beta points gain.<br> <b>Cost:</b>` + format(this.cost()) + ' beta points' + `\n            
-            <br> <b>Effect: x</b>` + format(this.effect(amt)) + `\n            <br> <b>Amount:</b>` + format(amt)
-            if (amt.lt(20)) out += '<br> <b> Need 20 buyable to unlock the next one.</b>'
-            return out
+            let oeff = new Decimal(3)
+            if (hasMilestone('G',1)) oeff = oeff.add(milestoneEffect('G',1))
+
+            //TEXT//
+            let desc = 'x'+format(oeff)+' beta points<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n' 
+            return desc + cost + buyableArrangement(this.layer, this.id, 25)
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(20))},
@@ -956,7 +995,1018 @@ addLayer("B", {
             player[this.layer].points = player[this.layer].points.sub(this.cost())
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
-        effect(x) {return new Decimal(3).pow(x)},
+        effect(x) {
+            let oeff = new Decimal(3)
+            if (hasMilestone('G',1)) oeff = oeff.add(milestoneEffect('G',1))
+            return oeff.pow(x)},
+        },
+        13: {
+        title: "Alpha buyable base <br>",
+        cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal(1e179) //Basecose
+
+            return base.mul(new Decimal(1.025).mul(1e5).pow(x.pow(2))) // base*1.025*1e5^(x^2)
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let cap = new Decimal("0.025")
+            let capt = ""
+            if (buyableEffect('B',13) >= 3){ cap = new Decimal("0.0005") ; capt = " (Capped) ";}
+            if (buyableEffect('B',13) >= 3.5){cap = new Decimal("0.000005") ; capt = " (SuperCapped) "}
+            
+            //TEXT//
+            let desc = '+'+cap+' Bap original effect<br>' + capt
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n'
+            let bonus = hasUpgrade('G', 32) ? getBuyableAmount('B', 22).div(2.5) : null
+            return desc + cost + buyableArrangement(this.layer, this.id, 25, {sign: '+', bonusAmount: bonus})
+        },
+        canAfford() { return player[this.layer].points.gte(this.cost()) },
+        unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(25))},
+        buy() {
+            player[this.layer].points = player[this.layer].points.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+
+            const cap1 = new Decimal(120)   // effect = 2
+            const cap2 = new Decimal(1120)  // effect = 2.5
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('G', 32)) y = getBuyableAmount('B', 22).div(2.5)
+            x = x.add(y)
+
+            if (x.lte(cap1))
+                return x.mul(0.025)
+
+            if (x.lte(cap2))
+                return new Decimal(3).add(
+                    x.sub(cap1).mul(0.0005)
+                )
+
+            return new Decimal(3.5).add(
+                x.sub(cap2).mul(0.000005)
+            )},
+        },
+        21: {
+        title: "Alpha buyable base 2 <br>",
+         cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("1e3265") //Basecose
+
+            return base.mul(new Decimal(1.035).mul(1e12).pow(x.pow(1.5))) // base*1.035*1e12^(x^1.5)
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let cap = new Decimal("0.05")
+            let capt = ""
+            if (buyableEffect('B',21) >= 1.2){ cap = new Decimal("0.001") ; capt = " (Capped) ";}
+            if (buyableEffect('B',21) >= 2.5){cap = new Decimal("0.00001") ; capt = " (SuperCapped) "}
+            
+            //TEXT//
+            let desc = '+'+cap+' Bapg² original effect<br>' + capt
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n' 
+            return desc + cost + buyableArrangement(this.layer, this.id, 35, {sign: '+'})
+        },
+        canAfford() { return player[this.layer].points.gte(this.cost()) },
+        unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(25))},
+        buy() {
+            player[this.layer].points = player[this.layer].points.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+
+            const cap1 = new Decimal(24)   // effect = 1.2
+            const cap2 = new Decimal(1324)  // effect = 2.5
+
+            if (x.lte(cap1))
+                return x.mul(0.05)
+
+            if (x.lte(cap2))
+                return new Decimal(1.2).add(
+                    x.sub(cap1).mul(0.001)
+                )
+
+            return new Decimal(2.5).add(
+                x.sub(cap2).mul(0.00001)
+            )},
+        },
+        22: {
+        title: "Pointxponent <br>",
+         cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("1e5800") //Basecose 
+            let multi = new Decimal(1e25)
+            if (hasUpgrade("G",34)) multi = new Decimal(1e22)
+            return base.mul(new Decimal(1.055).mul(multi).pow(x.pow(2))) //base*1.055*1e25^(x^2)
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let cap = new Decimal("0.006")
+            let capt = ""
+            if (buyableEffect('B',22) >= 0.27){ cap = new Decimal("0.0000075") ; capt = " (Capped) ";}
+            //TEXT//
+            let desc = '+'+cap+' to point exp gain<br>' + capt
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n'
+            let bonus = hasUpgrade('G', 51) ? getBuyableAmount('B', 23) : null
+            return desc + cost + buyableArrangement(this.layer, this.id, 70, {sign: '+', bonusAmount: bonus})
+        },
+        canAfford() { return player[this.layer].points.gte(this.cost()) },
+        unlocked() {return getBuyableAmount(this.layer,21).gte(new Decimal(35))},
+        buy() {
+            player[this.layer].points = player[this.layer].points.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            const capPoint = new Decimal(45) // 50 * 0.006 = 0.25
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('G', 51)) y = getBuyableAmount('B', 23)
+            x = x.add(y)
+            if (x.lte(capPoint))return x.mul(0.006)
+            return new Decimal(0.27).add(x.sub(capPoint).mul(0.0000075))},
+        },
+        23: {
+        title: "Pointxponent 2<br>",
+         cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("1e110000") //Basecose
+
+            let multi = new Decimal(1e30)
+            return base.mul(new Decimal(1.075).mul(multi).pow(x.pow(1.7)))//base*1.075*1e30^(x^1.7)
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let cap = new Decimal("0.0001")
+            let capt = ""
+            if (buyableEffect('B',23) >= 0.25){ cap = new Decimal("0.000005") ; capt = " (Capped)";}
+            //TEXT//
+            let desc = '+'+cap+' to point exp gain<br>' + capt
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' beta points \n'
+            let bonus = hasUpgrade('D', 25) ? getBuyableAmount('D', 11) : null
+            return desc + cost + buyableArrangement(this.layer, this.id, 0, {sign: '+', bonusAmount: bonus})
+        },
+        canAfford() { return player[this.layer].points.gte(this.cost()) },
+        unlocked() {return getBuyableAmount(this.layer,22).gte(new Decimal(70))},
+        buy() {
+            player[this.layer].points = player[this.layer].points.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            const capPoint = new Decimal(2500) // 2500 * 0.0001 = 0.25
+            //Y
+            let y = new Decimal(0)
+            if (hasUpgrade('D', 25)) y = getBuyableAmount('D', 11)
+            x = x.add(y)
+            if (x.lte(capPoint))return x.mul(0.0001)
+            return new Decimal(0.25).add(x.sub(capPoint).mul(0.000005))},
+        },
+    },
+}),
+
+addLayer("G", {
+    name: "gamma", // This is optional, only used in a few places, If absent it just uses the layer id.
+    symbol: "γ", // This appears on the layer's node. Default is the id with the first letter capitalized
+    position: 1, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
+    startData() { return {
+        unlocked: false,
+        points: new Decimal(0),
+        total: new Decimal(0),
+    }},
+    // Prevent the layer from being permanently unlocked by a prestige
+    color: "#fc8600",
+    requires: new Decimal("1e308"),
+    resource: "gamma points", //Current layer currency
+    baseResource: "alpha points", //Currency to buy the layer
+    baseAmount() {
+        return player.A.points
+    },
+    type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
+    exponent: 0.009, // Prestige currency exponent
+    branches: ["D"],
+    gainMult() { // Calculate the multiplier for main currency from bonuses
+        mult = new Decimal(1)
+        if (hasUpgrade('G',14)) mult = mult.times(upgradeEffect('G',14))
+        if (hasMilestone('G',3)) mult = mult.times(milestoneEffect('G',3))
+        if (hasUpgrade('G',31)) mult = mult.times(upgradeEffect('G',31))
+        if (hasUpgrade('G',33)) mult = mult.times(upgradeEffect('G',33))
+        if (hasUpgrade('G',41)) mult = mult.times(upgradeEffect('G',41))
+        if (hasUpgrade('G',45)) mult = mult.times(1e100)
+        if (hasUpgrade('G',53)) mult = mult.times(upgradeEffect(this.layer,53))
+        if (hasMilestone('D',1)) mult = mult.times(milestoneEffect('D',1).gammaBoost)
+        if (hasMilestone('D',2)) mult = mult.times(milestoneEffect('D',2))
+
+        let power = new Decimal(1.1)
+        if (hasUpgrade('D',23)) power = new Decimal(2.5)
+        if (hasMilestone('D',3)) mult = mult.times(player.D.duplicates.pow(power)).max(1)
+        return mult
+    },
+    gainExp() { // Calculate the exponent on main currency from bonuses
+        let exp = new Decimal(1)
+        try{
+            if(hasUpgrade(this.layer,15)) exp = exp.add(upgradeEffect(this.layer,15))
+        }catch (e) {}
+        return exp
+    },
+    passiveGeneration(){
+        if (hasMilestone('D',3)) return 1
+        if (hasMilestone('G',5)) return 0.0005 //0.05%/s
+    },
+    update(diff) {
+        const data = player.G
+        if (player.G.layerShown) data.unlocked = true
+    },
+    row: 1, // Row the layer is in on the tree (0 is the first row)
+    hotkeys: [
+        {key: "g", description: "G: Reset for Gamma points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
+    ],
+    layerShown(){return hasMilestone('B',4) || player.G.unlocked},
+    tabFormat: {
+        "Upgrades": {
+            content: ['main-display','prestige-button','upgrades'],
+        },
+        "Milestone":{
+            content: ['main-display','milestones']
+        }
+    },
+    upgrades: {
+        rows: 5,
+        cols: 5,
+        11: {
+        title: "Here to get a bit faster",
+        description: "x4 points, x3 alpha, x2 beta + new upgrades/milestones + x10 autobuy speed",
+        cost: new Decimal(1),
+        },
+        12: {
+        title: "Maybe way faster is better",
+        description: "x1e15 points, x1e7 alpha points, x1e3 beta points",
+        cost: new Decimal(1),
+        unlocked(){return hasUpgrade(this.layer,11)},
+        },
+        13: {
+        title: "Gamma Gift",
+        description: "Total gamma boost point (max at e250)",
+        cost: new Decimal(10),
+        unlocked(){return hasUpgrade(this.layer,12)},
+        effect() {
+            let val = player.G.total.pow(32)
+            return val.min(new Decimal("1e250")).max(1)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        14: {
+        title: "_Self_",
+        description: "Gamma boost gamma",
+        cost: new Decimal("1e5"),
+        unlocked(){return hasUpgrade(this.layer,13)},
+        effect() {
+            return player.G.points.max(1).log10().pow(1.5).add(1)
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+        },
+        15: {
+        title: "GammaExp",
+        description: "Total Gamma affect gamma exp gain very very slightly (start at 1e7)",
+        cost: new Decimal("1e9"),
+        unlocked(){return hasUpgrade(this.layer,14)},
+        effect() {
+            let t = player.G.total.max(1).log10()
+            if (t.lt(7)) return new Decimal(0)
+            let ratio = t.div(7)
+            // count = floor(log2(ratio)) + 1
+            let count = ratio.log(2).floor().add(1)
+            let eff = new Decimal("0.0001").mul(count)
+            return eff
+        },
+        effectDisplay() { return "+"+format(upgradeEffect(this.layer, this.id))},
+        },
+        21: {
+        title: "Gamma Beta Boost",
+        description: "add +0.0005 to Beta Boost original effect for each log10(total gamma)",
+        cost: new Decimal("1e11"),
+        unlocked(){return hasUpgrade(this.layer,15)},
+        effect() {
+            let t = player.G.total.max(1).log10()
+            let eff = new Decimal(0)
+            eff = eff.add(0.0005).mul(t)
+            return eff
+        },
+        effectDisplay() { return "+"+format(upgradeEffect(this.layer, this.id))},
+        },
+        22: {
+        title: "Galph^2",
+        description: "Gamma upgrade^gamma upgrade^(gamma upgrade/2) boost alpha",
+        cost: new Decimal("2e13"),
+        unlocked(){return hasUpgrade(this.layer,21)},
+        effect() {
+            let gucount = new Decimal(player.G.upgrades.length)
+            return gucount.pow(gucount).pow(gucount.div(2))
+        },
+        effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x"},
+        },
+        23: {
+        title: "Betamount Buyable",
+        description: "Abb amount add to alpha exp gain (Capped at +0.15)",
+        cost: new Decimal("1e15"),
+        unlocked(){return hasUpgrade(this.layer,22)},
+        effect() {
+            let amt = getBuyableAmount('B', 13)
+            let cap = new Decimal(375) // 375 / 2500 = 0.15
+
+            if (amt.lte(cap))
+                return amt.div(2500).max(0)
+
+            return new Decimal(0.15).add(
+                amt.sub(cap).div(5e10).max(0)
+            )
+        },
+        effectDisplay() { return "+"+format(upgradeEffect(this.layer, this.id))},
+        },
+        24: {
+        title: "Lauched into space",
+        description: "Gamma milestone 4 boost is ^1.19 stronger",
+        cost: new Decimal("2e57"),
+        unlocked(){return hasUpgrade(this.layer,23)},
+        },
+        25: {
+        title: "So you have a purpose...",
+        description: "Achievements points^25 boost point",
+        cost: new Decimal("1e93"),
+        unlocked(){return hasUpgrade(this.layer,24)},
+        effect(){
+            return player.ach.points.pow(25)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer,this.id))+"x"}
+        },
+        31: {
+        title: "Yet again...",
+        description: "Abb*achievement points^3 boost gamma",
+        cost: new Decimal("1e107"),
+        unlocked(){return hasUpgrade(this.layer,25)},
+        effect(){
+            return getBuyableAmount('B',13).mul(player.ach.points.pow(3)).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer,this.id))+"x"}
+        },
+        32: {
+        title: "",
+        description: "Pointxponent/2.5 add to Abb",
+        cost: new Decimal("1e139"),
+        unlocked(){return hasUpgrade(this.layer,31)},
+        },
+        33: {
+        title: "_Self_v2",
+        description: "Total gamma boost itself",
+        cost: new Decimal("1e185"),
+        unlocked(){return hasUpgrade(this.layer,32)},
+        effect(){
+            let calc = player.G.total.pow(0.0237)
+            return calc
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer,this.id))+"x"}
+        },
+        34: {
+        title: "pointxdivided",
+        description: "pointxponent multiplicative is reduced (1e25 --> 1e22)",
+        cost: new Decimal("1e286"),
+        unlocked(){return hasUpgrade(this.layer,33)},
+        },
+        35: {
+        title: "Beta_divided.exe",
+        description: "Beta Boost 2 multi boost 1.75 -> 1.5",
+        cost: new Decimal("1e350"),
+        unlocked(){return hasUpgrade(this.layer,34)},
+        },
+        41: {
+        title: "BetaGammaBoost",
+        description: "Beta Boost 2 effect boost gamma",
+        cost: new Decimal("1e444"),
+        unlocked(){return hasUpgrade(this.layer,35)},
+        effect(){
+            return buyableEffect('B',12).pow(0.008)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        42: {
+        title: "AlphEXPoints",
+        description: "Each upgrade in this row add to alpha gain exp",
+        cost: new Decimal("1e1603"),
+        unlocked(){return hasUpgrade(this.layer,41)},
+        effect(){
+             // Count owned upgrades in the first row (11..15)
+            let count = 0
+            let start = new Decimal(0)
+            for (let id = 41; id <= 45; id++) if (hasUpgrade('G', id)) count++
+            // For each owned upgrade in the row, multiply the base effect by 2
+            // Result = base * (2^count)
+            return new Decimal(0.001).mul(count)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        43: {
+        title: "Gemmata Boost",
+        description: "Add +0.05 to Beta Boost effect",
+        cost: new Decimal("1e1647"),
+        unlocked(){return hasUpgrade(this.layer,42)},
+        },
+        44: {
+        title: "Addition to something existant",
+        description: "Add +0.025 to Bapg2² effect",
+        cost: new Decimal("1e1753"),
+        unlocked(){return hasUpgrade(this.layer,43)},
+        },
+        45: {
+        title: "I thought it will never come",
+        description: "Unlcok a new Layer and boost gamma by 1e100",
+        cost: new Decimal("1e1790"),
+        unlocked(){return hasUpgrade(this.layer,44)},
+        },
+        51: {
+        title: "Self Point X Ponent",
+        description: "Pointxponent 2 add to Pointxponent",
+        cost: new Decimal("1e4860"),
+        unlocked(){return hasUpgrade(this.layer,45)},
+        },
+        52: {
+        title: "Directed to there",
+        description: "Total gamma boost Duplicates",
+        cost: new Decimal("1e4905"),
+        unlocked(){return hasUpgrade(this.layer,51)},
+        effect(){
+            return player.G.total.log10().log(5)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        53: {
+        title: "Give it to me NOW",
+        description: "Total gamma^0.01 boost gamma",
+        cost: new Decimal("1e6020"),
+        unlocked(){return hasUpgrade(this.layer,52)},
+        effect(){
+            return player.G.total.pow(0.01)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        54: {
+        title: "Gammaplications",
+        description: "log(10) of Total gamma^0.05 boost Duplicates",
+        cost: new Decimal("1e6545"),
+        unlocked(){return hasUpgrade(this.layer,53)},
+        effect(){
+            return player.G.total.pow(0.05).log(10)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        55: {
+        title: "From somewhere else",
+        description: "Point/1e410k.pow(0.01) boost itself",
+        cost: new Decimal("1e6900"),
+        unlocked(){return hasUpgrade(this.layer,54)},
+        effect(){
+            return player.points.div("1e410000").pow(0.01).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+    },
+    milestones: {
+        0: {
+            requirementDescription: "Require : 1e10 Gamma points (1)",
+            done() { return player.G.points.gte("1e10") },
+            effect(){
+                let val = new Decimal(0)
+                return val.add(0.0065).mul(getMilestoneCount(this.layer))
+            },
+            effectDescription(){
+                let a = "Reward: Generate 7.5% of beta points per second, buy all alpha buyable at the same time and each gamma milestone add +0.0065 to point gain exp<br> \n"
+                return a + "Currently: +" + format(milestoneEffect('G',0))
+            },
+            style: {'width': '750px'},
+        },
+        1: {
+            requirementDescription: "Require : 1.5e14 Gamma points (2)",
+            done() { return player.G.points.gte("1.5e14") },
+            unlocked(){return hasMilestone(this.layer,0)},
+            effect(){
+                let val = new Decimal(0).add(new Decimal(0.2)).mul(getMilestoneCount(this.layer).sub(1))
+                if (milestoneEffect('G',1) >= 0.7) val = new Decimal(0.7).add(new Decimal(0.02).mul(getMilestoneCount(this.layer).sub(4)))
+                return val
+            },
+            effectDescription(){
+                let cap = ""
+                let eff = new Decimal(0.2)
+                if (milestoneEffect('G',1) >= 0.7) {cap = " (Capped)"; eff = eff.div(10)}
+                let a = "Reward: For each gamma milestone-1 keep beta & alpha upgrade row and add +"+format(eff)+" original effect to Beta Boost 2<br> \n"
+                return a + "Currently: +" + format(milestoneEffect('G',1).max(0))+cap
+            },
+            style: {'width': '750px'},
+        },
+        2: {
+            requirementDescription: "Require : 2e16 Gamma points (3)",
+            done() { return player.G.points.gte("2e16") },
+            unlocked(){return hasMilestone(this.layer,1)},
+            effect(){
+                return player.G.total.div(1e16).log("1ee4").min(0.25)
+            },
+            effectDescription(){
+                let a = "Reward: x3 to BulkA & beta autobuy speed and total gamma reduce Beta Boost 2 exponent <br> \n"
+                let text = ""
+                if (milestoneEffect('G',2) >= 0.25) text = " (Maxed)"
+                return a + "Currently: -" + format(milestoneEffect('G',2).min(0.25))+ text
+            },
+            style: {'width': '750px'},
+        },
+        3: {
+            requirementDescription: "Require : 1e32 Gamma points (4)",
+            done() { return player.G.points.gte("1e32") },
+            unlocked(){return hasMilestone(this.layer,2)},
+            effect(){
+                let val = new Decimal(player.G.upgrades.length)
+                if (hasUpgrade('G',24)) val = val.pow(1.19)
+                return val.mul(val.pow(val)).max(1)
+            },
+            effectDescription(){
+                let a = "Reward: Each gamma milestone-2 will keep a beta milestone, total gamma upgrade boost gamma and buy beta buyables <br> \n"
+                let text = "x"
+                return a + "Currently: " + format(milestoneEffect('G',3))+ text
+            },
+            style: {'width': '750px'},
+        },
+        4: {
+            requirementDescription: "Require : 1e86 Gamma points (5)",
+            done() { return player.G.points.gte("1e86") },
+            unlocked(){return hasMilestone(this.layer,3)},
+            effect(){
+            let val = new Decimal(getBuyableAmount('A',21)).max(1)
+            return val.max(1).pow(55.55)
+            },
+            effectDescription(){
+                let a = "Reward: Generate 200% of beta/s, 10000% of alpha/s, keep automation on unlocked milestones and Bpg² amount^55.55 boost beta<br> \n"
+                let text = "x"
+                return a + "Currently: " + format(milestoneEffect('G',4))+ text
+            },
+            style: {'width': '750px'},
+        },
+        5: {
+            requirementDescription: "Require : 1e199 Gamma points (6)",
+            done() { return player.G.points.gte("1e199") },
+            unlocked(){return hasMilestone(this.layer,4)},
+            effect(){return new Decimal("1e199")},
+            effectDescription(){
+                let a = "Reward: x10 to all bulk and x5 to all speed, boost alpha point by 1e199 and Generate 0.05% of gamma <br> \n"
+                let text = "x"
+                return a + "Currently: " + format(milestoneEffect('G',5))+ text
+            },
+            style: {'width': '750px'},
+        },
+        6: {
+            requirementDescription: "Require : 5e610 Gamma points (7)",
+            done() { return player.G.points.gte("5e610") },
+            unlocked(){return hasMilestone(this.layer,5)},
+            effectDescription(){
+                let a = "Reward: Add +0.1 to Boost beta points exponent <br> \n"
+                return a
+            },
+            style: {'width': '750px'},
+        },
+    }
+}),
+
+addLayer("D", {
+    name: "delta", // This is optional, only used in a few places, If absent it just uses the layer id.
+    symbol: "δ", // This appears on the layer's node. Default is the id with the first letter capitalized
+    position: 0, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
+    startData() { return {
+        unlocked: false,
+        points: new Decimal(0),
+        total: new Decimal(0),
+        resets: new Decimal(0),
+        duplicates: new Decimal(0),
+        dupliGen: new Decimal(0),
+        totalDuplicates : new Decimal(0),
+    }},
+    // Prevent the layer from being permanently unlocked by a prestige
+    color: "#ac00fc",
+    requires: new Decimal("1e2297"),
+    resource: "delta points", //Current layer currency
+    baseResource: "gamma points", //Currency to buy the layer
+    baseAmount() {
+        return player.G.points.floor()
+    },
+    type: "static", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
+    exponent: 6, // Prestige currency exponent
+    exponent() {
+        let exp = 6
+        let r = player.D.resets
+        if (r == 3) exp = 5.25
+        if (r >= 5) exp = 7
+        return exp
+    },
+    onPrestige(gain) {
+        player[this.layer].resets = player[this.layer].resets.add(1) //count Delta reset
+    },
+    doReset(resettingLayer){
+        layerDataReset('G')
+    },
+    gainExp() { // Calculate the exponent on main currency from bonuses
+        let exp = new Decimal(1)
+        try{
+        }catch (e) {}
+        return exp
+    },
+    update(diff){
+        let data = player.D
+
+        if (player.D.layerShown) data.unlocked = true
+
+        // Generate duplicates per second when 4th delta milestone unlocked
+        if (hasMilestone(this.layer,3)){
+            let gen = new Decimal(1)
+            let data = player.D
+            if (hasUpgrade(this.layer,11)) gen = gen.mul(upgradeEffect(this.layer,11))
+            if (hasUpgrade(this.layer,13)) gen = gen.mul(upgradeEffect(this.layer,13))
+            if (hasUpgrade(this.layer,14)) gen = gen.mul(upgradeEffect(this.layer,14))
+            if (hasUpgrade(this.layer,15)) gen = gen.mul(upgradeEffect(this.layer,15))
+            if (hasUpgrade(this.layer,22)) gen = gen.mul(upgradeEffect(this.layer,22))
+            if (hasMilestone(this.layer, 4)) gen = gen.mul(milestoneEffect(this.layer,4))
+            if (hasUpgrade('G',52)) gen = gen.mul(upgradeEffect('G',52))
+            if (hasBuyable(this.layer,11)) gen = gen.mul(buyableEffect(this.layer,11))
+            if (hasUpgrade(this.layer,25)) gen = gen.mul(upgradeEffect(this.layer,25))
+            if (hasBuyable(this.layer,12)) gen = gen.mul(buyableEffect(this.layer,12))
+            if (hasUpgrade('G',54)) gen = gen.mul(upgradeEffect('G',54))
+            data.dupliGen = gen
+            let gained = gen.mul(diff)
+            data.duplicates = data.duplicates.add(gained)
+            data.totalDuplicates = (data.totalDuplicates || decimalZero).add(gained)
+            data.duplicates = data.duplicates.add(gen.mul(diff))
+        } else {
+            data.dupliGen = new Decimal(0)
+        }
+    },
+    row: 2, // Row the layer is in on the tree (0 is the first row)
+    hotkeys: [
+        {key: "d", description: "D: Reset for Gamma points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
+    ],
+    layerShown(){return hasUpgrade('G',45) || player.D.unlocked},
+    tabFormat: {
+        "Main": {
+            content: [
+                function() { if (player.tab == "D") return "main-display" },
+                function() { if (player.tab == "D") return "prestige-button" },
+                ["raw-html", function() {
+                    if (player.tab == "D") return "<br>You have made " + player.D.resets + " Delta resets"
+                }],
+                ["raw-html", function() {
+                    let power = new Decimal(1.1)
+                    let powerb = new Decimal(11)
+                    let textbonus = ""
+                    if (hasUpgrade('D', 23)) power = new Decimal(2.5)
+                    //________TEXT________
+                    let text = shiftDown
+                        ? colorText("h2", "#ac00fc", "Duplicates^" + power)
+                        : colorText("h2", "#ac00fc", format(player.D.duplicates.pow(power)))
+                    if (hasMilestone(this.layer,5)) {
+                        textbonus = shiftDown
+                        ? " and beta by " + colorText("h2", '#ac00fc', "Duplicates^" + powerb)
+                        : " and beta by " + colorText("h2", '#ac00fc', format(player.D.duplicates.pow(powerb)))
+                    }
+                    if (player.D.resets >= 4)
+                        return "You have " + colorText("h2", "#ac00fc", format(player.D.duplicates)) +
+                            " Duplicates and generate " + format(player.D.dupliGen) +
+                            " Duplicates/s which boost gamma gain by " + text + textbonus
+                }],
+                ["microtabs", "Duplicates"],
+            ],
+        },
+        "Milestone": {
+            content: ['main-display', 'milestones']
+        }
+    },
+
+   microtabs: {
+        Duplicates: {
+            "Upgrades": {
+                content: ['upgrades'],
+                unlocked() {
+                    hasMilestone('D', 4)
+                }
+            },
+            "Buyables": {
+                content: ['buyables'],
+                unlocked() {
+                    return (hasUpgrade('D', 24))
+                }
+            },
+        },
+    },
+    upgrades: {
+        rows: 6,
+        cols: 6,
+        11: {
+        title: "Welcome to the new journey !",
+        description: "Duplicates multiply themselves",
+        cost: new Decimal(150),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasMilestone(this.layer,3)},
+        effect(){
+            let val = player.D.duplicates.pow(0.1)
+            if (hasUpgrade('D',21)) val = val.mul(upgradeEffect('D',21))
+            return val.max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        12: {
+        title: "Duplicates points",
+        description: "Duplicates multiply points",
+        cost: new Decimal(300),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,11)},
+        effect(){
+            return player.D.duplicates.pow(100)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        13: {
+        title: "Gammaplates",
+        description: "Gamma Upgrade boost Duplicates",
+        cost: new Decimal(700),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,12)},
+        effect(){
+            return getUpgradeCount('G')
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        14: {
+        title: "Duplicates+",
+        description: "Duplicates Upgrade boost Duplicates",
+        cost: new Decimal(2e4),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,13)},
+        effect(){
+            return getUpgradeCount('D')
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        15: {
+        title: "Delta doubleplicates",
+        description: "Delta Reset*DR boost Duplicates",
+        cost: new Decimal(5e4),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,14)},
+        effect(){
+            return player.D.resets.mul(player.D.resets)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        16: {
+        title: "Base reduction",
+        description: "Reduce Beta Boost multi to 1.05",
+        cost: new Decimal(5e5),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,15)},
+        },
+        21: {
+        title: "Duplicates.duplicates",
+        description: "Duplicates upgrades boost Duplicates upgrade 1 effect",
+        cost: new Decimal(1e9),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,16)},
+        effect(){
+            return getUpgradeCount('D')
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        22: {
+        title: "We will never stop",
+        description: "Gamma upgrade 4 effect boost Duplicates + new upgrades",
+        cost: new Decimal(2e10),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,21)},
+        effect(){
+            return upgradeEffect('G',14)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        23: {
+        title: "Upgrade Effect",
+        description: "Duplicates boost on gamma is now ^2.5",
+        cost: new Decimal(2.5e16),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,22)},
+        },
+        24: {
+        title: "These have some too",
+        description: "Unlock Buyables",
+        cost: new Decimal(5e17),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,23)},
+        },
+        25: {
+        title: "Duplicatations Amount",
+        description: "Duplications Amount boost Duplicates",
+        cost: new Decimal(1e25),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,24)},
+        effect(){
+            return getBuyableAmount(this.layer,11)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        26: {
+        title: "Duplixpoint",
+        description: "Duplications add to Pointxponent 2",
+        cost: new Decimal(1e30),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,25)},
+        },
+        31: {
+        title: "_",
+        description: "Total Duplicates/1e50^0.5 boost itself",
+        cost: new Decimal(1e502),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,31)},
+        },
+    },
+    milestones: {
+        0: {
+            requirementDescription: "Require : 1 Delta Reset (1)",
+            done() { return player.D.resets.gte(1) },
+            effect(){
+                return {base: 0.05, ABspeed: player.D.resets}
+            },
+            effectDescription(){
+                let eff = milestoneEffect('D',0)
+                let a = "Reward: Keep alpha generation at 250%, per milestone keep alpha row upgrade + autobuy, delta reset+1 add to A buyables speed, x5 B buyables speed and add 0.05 to Boost alpha points 2 base effect<br> \n"
+                return a + "Currently: +" +
+                format(eff.base) + " Bap2 base | " +
+                format(eff.ABspeed) + "x ABspeed"
+            },
+            style: {'width': '750px'},
+        },
+        1: {
+            requirementDescription: "Require : 2 Delta Reset (2)",
+            done() { return player.D.resets.gte(2) },
+            unlocked(){return hasMilestone(this.layer,0)},
+            effect(){
+                return {
+                    gammaBoost: player.D.resets.mul(3),
+                    betaExp: getBuyableAmount('A',21).max(1).pow(2)
+                }
+            },
+            effectDescription() {
+                let eff = milestoneEffect("D", 1)
+
+                return "Reward: Delta resets boost Gamma by 3x and each Boost point gain ² boost Beta gain by ^2<br>" +
+                    "Currently: " +
+                    format(eff.gammaBoost) + "x Gamma | " +
+                    format(eff.betaExp) + "x Beta"
+            },
+            style: {'width': '750px'},
+        },
+        2: {
+            requirementDescription: "Require : 3 Delta Reset (3)",
+            done() { return player.D.resets.gte(3) },
+            unlocked(){return hasMilestone(this.layer,1)},
+            effect(){
+                return player.D.resets.mul(1e20)
+            },
+            effectDescription() {
+                return "Reward: Keep beta generation at 250%, per milestone keep beta row upgrade, delta reset*1e20 multiply gamma <br>" +
+                    "Currently: " +
+                    format(milestoneEffect("D", 2))+"x"
+            },
+            style: {'width': '750px'},
+        },
+        3: {
+            requirementDescription: "Require : 4 Delta Reset (4)",
+            done() { return player.D.resets.gte(4) },
+            unlocked(){return hasMilestone(this.layer,2)},
+            effectDescription() {
+                return "Reward: Unlock Duplicates and Generate 100% gamma/s<br>"
+            },
+            style: {'width': '750px'},
+        },
+        4: {
+            requirementDescription: "Require : 5 Delta Reset (5)",
+            done() { return player.D.resets.gte(5) },
+            unlocked(){return hasMilestone(this.layer,3)},
+            effect() {
+                let DR = new Decimal(player.D.resets)
+                let val = decimalOne
+                for (let i = 0; i < DR; i++) {
+                    val = val.mul(3) 
+                }
+                return val 
+            },
+            effectDescription() {
+                return "Reward: Each New Delta reset boost Duplicates by x3 <br>" +"Currently: "+ format(milestoneEffect(this.layer, this.id))+"x"
+            },
+            style: {'width': '750px'},
+        },
+        5: {
+            requirementDescription: "Require : 1e42 Duplicates (6)",
+            done() { return player.D.duplicates.gte("1e42")},
+            unlocked(){return hasMilestone(this.layer,4)},
+            effectDescription() {
+                return "Reward: Add a new boost to Duplicates<br>"
+            },
+            style: {'width': '750px'},
+        },
+    },
+    buyables:{
+        11: {
+        title: "Duplications<br>",
+        cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("5e17") //Basecose
+            return base.mul(new Decimal(1.01).pow(x.pow(2)))//base*1.01^x²
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let val = new Decimal(1.5)
+            //TEXT//
+            let desc = 'x'+val+' to Duplicates gain<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
+            return desc + cost + buyableArrangement(this.layer, this.id, 55)
+        },
+        canAfford() { return player[this.layer].duplicates.gte(this.cost()) },
+        unlocked() {return hasUpgrade('D',24)},
+        buy() {
+            player[this.layer].duplicates = player[this.layer].duplicates.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            let oeff = new Decimal(1.5)
+            return oeff.pow(x)},
+        },
+        12: {
+        title: "Duplicanations<br>",
+        cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("2.5e30") //Basecose
+            return base.mul(new Decimal(1.12).pow(x.pow(2)))//base*1.12^x²
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let val = new Decimal(2.75)
+            //TEXT//
+            let desc = 'x'+val+' to Duplicates gain<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
+            return desc + cost + buyableArrangement(this.layer, this.id, 100)
+        },
+        canAfford() { return player[this.layer].duplicates.gte(this.cost()) },
+        unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(55))},
+        buy() {
+            player[this.layer].duplicates = player[this.layer].duplicates.sub(this.cost())
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            let oeff = new Decimal(2.75)
+            return oeff.pow(x)},
         },
     }
 })
