@@ -63,58 +63,65 @@ function buyableBulk(layer){
 }
 
 function getAutoBuySpeed(layer){
-        let mult = new Decimal(1)
-        if (layer == "A") {
-            if (hasUpgrade('B', 33)) mult = mult.times(2)
-            if (hasUpgrade('G',11)) mult = mult.times(10) 
-            if (hasMilestone('G', 5)) mult = mult.times(5)
-            if (hasMilestone('D', 0)) mult = mult.times(player.D.resets.add(1))
-        }
-        if (layer == "B") {
-            if (hasMilestone('G', 2)) mult = mult.times(3)
-            if (hasMilestone('G', 5)) mult = mult.times(5)
-        }
-        return mult
+    let mult = new Decimal(1)
+    if (layer == "A") {
+        if (hasUpgrade('B', 33)) mult = mult.times(2)
+        if (hasUpgrade('G', 11)) mult = mult.times(10)
+        if (hasMilestone('G', 5)) mult = mult.times(5)
+        if (hasMilestone('D', 0)) mult = mult.times(player.D.resets.add(1))
+    }
+    if (layer == "B") {
+        if (hasMilestone('G', 2)) mult = mult.times(3)
+        if (hasMilestone('G', 5)) mult = mult.times(5)
+    }
+    return mult
 }
 
-function buyAllAtOnce(layer) {
-    if (!player[layer].buyables) return;
+function buyAllAtOnce(layer, bulk = new Decimal(1)) {
+    if (!player[layer].buyables) return
     for (let id in layers[layer].buyables) {
         if (!isNaN(id)) {
-            if (layers[layer].buyables[id].canAfford?.()) {
-                layers[layer].buyables[id].buy();
+            const buyable = layers[layer].buyables[id]
+            if (buyable.canAfford?.()) {
+                let remaining = new Decimal(bulk)
+                while (remaining.gte(1) && buyable.canAfford?.()) {
+                    buyable.buy()
+                    remaining = remaining.sub(1)
+                }
             }
         }
     }
 }
 
 function generalizedBuyableLogic(diff, layer, condition) {
-    if (!player[layer].buyables) return;
+    if (!player[layer].buyables) return
 
-    if (!player[layer].buyableTime) player[layer].buyableTime = new Decimal(0);
-    player[layer].buyableTime = player[layer].buyableTime.add(diff);
+    if (!player[layer].buyableTime) player[layer].buyableTime = new Decimal(0)
+    player[layer].buyableTime = player[layer].buyableTime.add(diff)
 
-    const speed = getAutoBuySpeed(layer);
-    const tickInterval = 1 / speed;
-    const bulk = buyableBulk(layer);
+    const speed = getAutoBuySpeed(layer).max(1)
+    const tickInterval = new Decimal(1).div(speed)
+    const bulk = buyableBulk(layer)
 
-    // Sort IDs numerically (11, 12, 13...)
     const ids = Object.keys(layers[layer].buyables)
         .filter(id => !isNaN(id))
-        .sort((a, b) => Number(a) - Number(b));
+        .sort((a, b) => Number(a) - Number(b))
 
     while (player[layer].buyableTime.gte(tickInterval)) {
-        player[layer].buyableTime = player[layer].buyableTime.sub(tickInterval);
+        player[layer].buyableTime = player[layer].buyableTime.sub(tickInterval)
 
         if (condition) {
-            buyAllAtOnce(layer);
+            buyAllAtOnce(layer, bulk)
         } else {
-            // Find the first affordable buyable
             for (let id of ids) {
-                const buyable = layers[layer].buyables[id];
+                const buyable = layers[layer].buyables[id]
                 if (buyable.canAfford?.()) {
-                    buyable.buy();
-                    break; // only one purchase per tick
+                    let remaining = new Decimal(bulk)
+                    while (remaining.gte(1) && buyable.canAfford?.()) {
+                        buyable.buy()
+                        remaining = remaining.sub(1)
+                    }
+                    break
                 }
             }
         }
@@ -122,9 +129,10 @@ function generalizedBuyableLogic(diff, layer, condition) {
 }
 
 function safeBuy(layer, cost, currency = "points") {
-    if (!player[layer][currency] >= cost) return false
-    player[layer][currency] = player[layer][currency]- cost
-    if (player[layer][currency] < 0 || isNaN(player[layer][currency])) {
+    let curr = new Decimal(player[layer][currency])
+    if (!curr.gte(cost)) return false
+    player[layer][currency] = curr.sub(cost)
+    if (player[layer][currency].lt(0) || Decimal.isNaN(player[layer][currency])) {
         player[layer][currency] = decimalZero
     }
     return true

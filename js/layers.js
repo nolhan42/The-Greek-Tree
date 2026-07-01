@@ -345,7 +345,7 @@ addLayer("A", {
         },
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -382,7 +382,7 @@ addLayer("A", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(10))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -429,7 +429,7 @@ addLayer("A", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(10))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -459,7 +459,7 @@ addLayer("A", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(15)) && hasUpgrade('B',11)},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {return new Decimal(1.25).pow(x)},
@@ -486,7 +486,7 @@ addLayer("A", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,21).gte(new Decimal(20))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -523,7 +523,7 @@ addLayer("A", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,22).gte(new Decimal(30))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "alpha")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -958,7 +958,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return hasMilestone(this.layer, 3)},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) { 
@@ -992,7 +992,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(20))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -1026,7 +1026,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(25))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -1076,7 +1076,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(25))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -1122,7 +1122,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,21).gte(new Decimal(35))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -1160,7 +1160,7 @@ addLayer("B", {
         canAfford() { return player[this.layer].points.gte(this.cost()) },
         unlocked() {return getBuyableAmount(this.layer,22).gte(new Decimal(70))},
         buy() {
-            if (!safeBuy(this.layer, this.cost(), "beta")) return
+            if (!safeBuy(this.layer, this.cost())) return
             setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
         },
         effect(x) {
@@ -1610,7 +1610,7 @@ addLayer("D", {
         let exp = 6
         let r = player.D.resets
         if (r == 3) exp = 5.25
-        if (r >= 5) exp = 80
+        if (r >= 5) exp = 70
         return exp
     },
     onPrestige(gain) {
@@ -1869,14 +1869,14 @@ addLayer("D", {
         },
         31: {
         title: "Duplicative Boost",
-        description: "Total Duplicates/1e50^0.5 boost itself",
+        description: "Total Duplicates/1e50^0.2 boost itself",
         cost: new Decimal(1e500),
         currencyInternalName: "duplicates",
         currencyLayer: "D",
         currencyDisplayName: "Duplicates", 
         unlocked(){return hasUpgrade(this.layer,31)},
         effect(){
-            return player.D.totalDuplicates.div("1e50").pow(0.5).max(1)
+            return player.D.totalDuplicates.div("1e50").pow(0.2).max(1)
         },
         effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
         },
