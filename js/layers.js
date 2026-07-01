@@ -1610,6 +1610,7 @@ addLayer("D", {
         let exp = 6
         let r = player.D.resets
         if (r == 3) exp = 5.25
+        if (r >= 5) exp = 80
         return exp
     },
     onPrestige(gain) {
