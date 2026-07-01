@@ -278,11 +278,11 @@ addLayer("ach", {
         },
         46: {
             name: "That's sick !",
-            tooltip: "Get ???: 20 AP",
+            tooltip: "Get 1e500K points: 20 AP",
             done() {
-                return player.D.duplicates.gte('1e500')
+                return player.points.gte("1e500000")
             },
-            unlocked() {return hasAchievement('ach',46)},
+            unlocked() {return hasAchievement('ach',36)},
             onComplete() {
                 addPoints("ach",20)
             }

@@ -1517,7 +1517,7 @@ addLayer("G", {
             done() { return player.G.points.gte("2e16") },
             unlocked(){return hasMilestone(this.layer,1)},
             effect(){
-                return player.G.total.div(1e16).log("1ee4").min(0.25)
+                return player.G.total.div(1e16).log("1ee4").min(0.25).max(0)
             },
             effectDescription(){
                 let a = "Reward: x3 to BulkA & beta autobuy speed and total gamma reduce Beta Boost 2 exponent <br> \n"
@@ -1610,7 +1610,7 @@ addLayer("D", {
         let exp = 6
         let r = player.D.resets
         if (r == 3) exp = 5.25
-        if (r >= 5) exp = 70
+        if (r >= 5) exp = 40
         return exp
     },
     onPrestige(gain) {
@@ -1658,6 +1658,7 @@ addLayer("D", {
             if (hasBuyable(this.layer,12)) gen = gen.mul(buyableEffect(this.layer,12))
             if (hasUpgrade('G',54)) gen = gen.mul(upgradeEffect('G',54))
             if (hasUpgrade(this.layer,31)) gen = gen.mul(upgradeEffect(this.layer,31))
+            if (hasBuyable(this.layer,13)) gen = gen.mul(buyableEffect(this.layer,13))
             data.dupliGen = gen
             let gained = gen.mul(diff)
             data.duplicates = data.duplicates.add(gained)
@@ -1870,7 +1871,20 @@ addLayer("D", {
         31: {
         title: "Duplicative Boost",
         description: "Total Duplicates/1e50^0.2 boost itself",
-        cost: new Decimal(1e500),
+        cost: new Decimal(1e50),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,31)},
+        effect(){
+            return player.D.totalDuplicates.div("1e50").pow(0.2).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        32: {
+        title: "Duplicative Boost",
+        description: "Total Duplicates/1e50^0.2 boost itself",
+        cost: new Decimal(1e115),
         currencyInternalName: "duplicates",
         currencyLayer: "D",
         currencyDisplayName: "Duplicates", 
@@ -1968,6 +1982,8 @@ addLayer("D", {
         },
     },
     buyables:{
+        rows: 2,
+        cols: 4,
         11: {
         title: "Duplications<br>",
         cost(x) {
@@ -2016,7 +2032,7 @@ addLayer("D", {
             //TEXT//
             let desc = 'x'+val+' to Duplicates gain<br>'
             let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
-            return desc + cost + buyableArrangement(this.layer, this.id, 100)
+            return desc + cost + buyableArrangement(this.layer, this.id, 25)
         },
         canAfford() {
             let data = player[this.layer]
@@ -2032,6 +2048,39 @@ addLayer("D", {
         effect(x) {
             x = new Decimal(x)
             let oeff = new Decimal(2.75)
+            return oeff.pow(x)},
+        },
+        13: {
+        title: "Duplifications<br>",
+        cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("1e60") //Basecose
+            return base.mul(new Decimal(2.5).pow(x.pow(2.25)))//base*2.5^x^2.25
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let val = new Decimal(6)
+            //TEXT//
+            let desc = 'x'+val+' to Duplicates gain<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
+            return desc + cost + buyableArrangement(this.layer, this.id, 50)
+        },
+        canAfford() {
+            let data = player[this.layer]
+            if (!data) return false
+            data.duplicates = new Decimal(data.duplicates || 0)
+            return data.duplicates.gte(this.cost())
+        },
+        unlocked() {return getBuyableAmount(this.layer,12).gte(new Decimal(25))},
+        buy() {
+            if (!safeBuy(this.layer, this.cost(), "duplicates")) return
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            let oeff = new Decimal(6)
             return oeff.pow(x)},
         },
     }
