@@ -1437,7 +1437,7 @@ addLayer("G", {
         title: "Self Point X Ponent",
         description: "Pointxponent 2 add to Pointxponent",
         cost: new Decimal("1e4860"),
-        unlocked(){return hasUpgrade(this.layer,45)},
+        unlocked(){return hasUpgrade(this.layer,45) && hasUpgrade('D', 22)},
         },
         52: {
         title: "Directed to there",
