@@ -120,3 +120,12 @@ function generalizedBuyableLogic(diff, layer, condition) {
         }
     }
 }
+
+function safeBuy(layer, cost, currency = "points") {
+    if (!player[layer][currency] >= cost) return false
+    player[layer][currency] = player[layer][currency]- cost
+    if (player[layer][currency] < 0 || isNaN(player[layer][currency])) {
+        player[layer][currency] = decimalZero
+    }
+    return true
+}
