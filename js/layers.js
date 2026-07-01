@@ -1610,7 +1610,6 @@ addLayer("D", {
         let exp = 6
         let r = player.D.resets
         if (r == 3) exp = 5.25
-        if (r >= 5) exp = 7
         return exp
     },
     onPrestige(gain) {
@@ -1619,13 +1618,25 @@ addLayer("D", {
     doReset(resettingLayer){
         layerDataReset('G')
     },
+    normalizeDuplicateData() {
+        let data = player.D
+        if (!data) return
+        data.duplicates = new Decimal(data.duplicates || 0)
+        data.dupliGen = new Decimal(data.dupliGen || 0)
+        data.totalDuplicates = new Decimal(data.totalDuplicates || 0)
+    },
     gainExp() { // Calculate the exponent on main currency from bonuses
         let exp = new Decimal(1)
         try{
         }catch (e) {}
         return exp
     },
+    onLoad() {
+        // Force-convert custom Decimal fields back after save load
+        this.normalizeDuplicateData()
+    },
     update(diff){
+        this.normalizeDuplicateData()
         let data = player.D
 
         if (player.D.layerShown) data.unlocked = true
@@ -1645,11 +1656,11 @@ addLayer("D", {
             if (hasUpgrade(this.layer,25)) gen = gen.mul(upgradeEffect(this.layer,25))
             if (hasBuyable(this.layer,12)) gen = gen.mul(buyableEffect(this.layer,12))
             if (hasUpgrade('G',54)) gen = gen.mul(upgradeEffect('G',54))
+            if (hasUpgrade(this.layer,31)) gen = gen.mul(upgradeEffect(this.layer,31))
             data.dupliGen = gen
             let gained = gen.mul(diff)
             data.duplicates = data.duplicates.add(gained)
             data.totalDuplicates = (data.totalDuplicates || decimalZero).add(gained)
-            data.duplicates = data.duplicates.add(gen.mul(diff))
         } else {
             data.dupliGen = new Decimal(0)
         }
@@ -1856,13 +1867,17 @@ addLayer("D", {
         unlocked(){return hasUpgrade(this.layer,25)},
         },
         31: {
-        title: "_",
+        title: "Duplicative Boost",
         description: "Total Duplicates/1e50^0.5 boost itself",
-        cost: new Decimal(1e502),
+        cost: new Decimal(1e500),
         currencyInternalName: "duplicates",
         currencyLayer: "D",
         currencyDisplayName: "Duplicates", 
         unlocked(){return hasUpgrade(this.layer,31)},
+        effect(){
+            return player.D.totalDuplicates.div("1e50").pow(0.5).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
         },
     },
     milestones: {
@@ -1943,7 +1958,7 @@ addLayer("D", {
         },
         5: {
             requirementDescription: "Require : 1e42 Duplicates (6)",
-            done() { return player.D.duplicates.gte("1e42")},
+            done() { return new Decimal(player.D.duplicates || 0).gte("1e42")},
             unlocked(){return hasMilestone(this.layer,4)},
             effectDescription() {
                 return "Reward: Add a new boost to Duplicates<br>"
@@ -1969,7 +1984,12 @@ addLayer("D", {
             let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
             return desc + cost + buyableArrangement(this.layer, this.id, 55)
         },
-        canAfford() { return player[this.layer].duplicates.gte(this.cost()) },
+        canAfford() {
+            let data = player[this.layer]
+            if (!data) return false
+            data.duplicates = new Decimal(data.duplicates || 0)
+            return data.duplicates.gte(this.cost())
+        },
         unlocked() {return hasUpgrade('D',24)},
         buy() {
             if (!safeBuy(this.layer, this.cost(), "duplicates")) return
@@ -1997,7 +2017,12 @@ addLayer("D", {
             let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
             return desc + cost + buyableArrangement(this.layer, this.id, 100)
         },
-        canAfford() { return player[this.layer].duplicates.gte(this.cost()) },
+        canAfford() {
+            let data = player[this.layer]
+            if (!data) return false
+            data.duplicates = new Decimal(data.duplicates || 0)
+            return data.duplicates.gte(this.cost())
+        },
         unlocked() {return getBuyableAmount(this.layer,11).gte(new Decimal(55))},
         buy() {
             if (!safeBuy(this.layer, this.cost(), "duplicates")) return
