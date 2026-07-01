@@ -1707,12 +1707,12 @@ addLayer("D", {
         }
     },
 
-   microtabs: {
+    microtabs: {
         Duplicates: {
             "Upgrades": {
                 content: ['upgrades'],
                 unlocked() {
-                    hasMilestone('D', 4)
+                    return hasMilestone('D', 4)
                 }
             },
             "Buyables": {
