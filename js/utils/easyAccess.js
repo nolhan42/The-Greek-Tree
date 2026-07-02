@@ -166,3 +166,27 @@ function setGridData(layer, id, data) {
 function gridEffect(layer, id) {
 	return (gridRun(layer, 'getEffect', player[layer].grid[id], id))
 }
+
+//___________CURRENCY-GEN___________
+function getCurrencyGen(layer, config) {
+    if (config.condition && !config.condition()) return decimalZero
+
+    let gen = new Decimal(1)
+
+    for (let id of (config.upgrades || []))
+        if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id))
+
+    for (let id of (config.buyables || []))
+        if (hasBuyable(layer, id)) gen = gen.mul(buyableEffect(layer, id))
+
+    for (let id of (config.milestones || []))
+        if (hasMilestone(layer, id)) gen = gen.mul(milestoneEffect(layer, id))
+
+    for (let [l, id] of (config.externalUpgrades || []))
+        if (hasUpgrade(l, id)) gen = gen.mul(upgradeEffect(l, id))
+
+    for (let [l, id] of (config.externalMilestones || []))
+        if (hasMilestone(l, id)) gen = gen.mul(milestoneEffect(l, id))
+
+    return gen
+}

@@ -287,6 +287,17 @@ addLayer("ach", {
                 addPoints("ach",20)
             }
         },
+        51: {
+            name: "So what ?",
+            tooltip: "Get 25 Duplicates Upgrade: 20 AP",
+            done() {
+                return getUpgradeCount('D') >= 25
+            },
+            unlocked() {return hasAchievement('ach',46)},
+            onComplete() {
+                addPoints("ach",20)
+            }
+        },
     },
     milestones: {
         0: {
@@ -342,6 +353,10 @@ addLayer("stat", {
                 }
             }],
             ]
+        },
+        "Info": {
+            content:[
+                "blank",["raw-html", "Adding Buyables only Affect the buyable it as been added to, and not the one down the chain (if there is one)"]],
         },
     },
 })
