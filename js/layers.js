@@ -1643,26 +1643,68 @@ addLayer("D", {
         // Force-convert custom Decimal fields back after save load
         this.normalizeDuplicateData()
     },
+    // update(diff){
+    //     this.normalizeDuplicateData()
+    //     let data = player.D
+
+    //     if (player.D.layerShown) data.unlocked = true
+
+    //     const duplicateConfig = {
+    //         condition: () => hasMilestone('D', 3),
+    //         upgrades:  [11, 13, 14, 15, 22, 25, 31, 33, 35],
+    //         buyables:  [11, 12, 13],
+    //         milestones: [4, 6],
+    //         externalUpgrades: [['G', 52], ['G', 54]],
+    //     }
+
+    //     const demoplexConfig = {
+    //         condition: () => hasUpgrade('D', 35),
+    //         upgrades:  [],                   
+    //         buyables:  [],
+    //         milestones: [],
+    //         externalUpgrades: [],
+    //     }
+    // },
     update(diff){
         this.normalizeDuplicateData()
         let data = player.D
 
         if (player.D.layerShown) data.unlocked = true
 
-        const duplicateConfig = {
-            condition: () => hasMilestone('D', 3),
-            upgrades:  [11, 13, 14, 15, 22, 25, 31, 33, 35],
-            buyables:  [11, 12, 13],
-            milestones: [4, 6],
-            externalUpgrades: [['G', 52], ['G', 54]],
-        }
+        // Generate duplicates per second when 4th delta milestone unlocked
+        if (hasMilestone(this.layer,3)){
+            let gen = new Decimal(1)
+            let demogen = new Decimal(1)
+            let data = player.D
+            if (hasUpgrade(this.layer,11)) gen = gen.mul(upgradeEffect(this.layer,11))
+            if (hasUpgrade(this.layer,13)) gen = gen.mul(upgradeEffect(this.layer,13))
+            if (hasUpgrade(this.layer,14)) gen = gen.mul(upgradeEffect(this.layer,14))
+            if (hasUpgrade(this.layer,15)) gen = gen.mul(upgradeEffect(this.layer,15))
+            if (hasUpgrade(this.layer,22)) gen = gen.mul(upgradeEffect(this.layer,22))
+            if (hasMilestone(this.layer, 4)) gen = gen.mul(milestoneEffect(this.layer,4))
+            if (hasUpgrade('G',52)) gen = gen.mul(upgradeEffect('G',52))
+            if (hasBuyable(this.layer,11)) gen = gen.mul(buyableEffect(this.layer,11))
+            if (hasUpgrade(this.layer,25)) gen = gen.mul(upgradeEffect(this.layer,25))
+            if (hasBuyable(this.layer,12)) gen = gen.mul(buyableEffect(this.layer,12))
+            if (hasUpgrade('G',54)) gen = gen.mul(upgradeEffect('G',54))
+            if (hasUpgrade(this.layer,31)) gen = gen.mul(upgradeEffect(this.layer,31))
+            if (hasBuyable(this.layer,13)) gen = gen.mul(buyableEffect(this.layer,13))
+            if (hasUpgrade(this.layer, 33)) gen = gen.mul(upgradeEffect(this.layer, 33))
+            if (hasUpgrade(this.layer, 35)) gen = gen.mul(upgradeEffect(this.layer, 35))
+            if (hasMilestone(this.layer,6)) gen = gen.mul(milestoneEffect(this.layer,6))
+            
+            data.dupliGen = gen
+            let gained = gen.mul(diff)
+            data.duplicates = data.duplicates.add(gained)
+            data.totalDuplicates = (data.totalDuplicates || decimalZero).add(gained)
+            //Demoplex
+            data.demoGen = demogen
+            let demogained = demogen.mul(diff)
+            data.demoplex = data.demoplex.add(demogained)
+            data.totalDemoplex = (data.totalDemoplex || decimalZero).add(demogained)
 
-        const demoplexConfig = {
-            condition: () => hasUpgrade('D', 35),
-            upgrades:  [],                   
-            buyables:  [],
-            milestones: [],
-            externalUpgrades: [],
+        } else {
+            data.dupliGen = new Decimal(0)
         }
     },
     row: 2, // Row the layer is in on the tree (0 is the first row)
@@ -1687,6 +1729,9 @@ addLayer("D", {
                     let text = shiftDown
                         ? colorText("h2", "#ac00fc", "Duplicates^" + power)
                         : colorText("h2", "#ac00fc", format(player.D.duplicates.pow(power)))
+                    let textdemo = shiftDown
+                        ? colorText("h2", "#c979ee", "Demoplex*3.5")
+                        : colorText("h2", "#c979ee", format(player.D.demoplex.mul(3.5)))
                     if (hasMilestone(this.layer,5)) {
                         textbonus = shiftDown
                         ? " and beta by " + colorText("h2", '#ac00fc', "Duplicates^" + powerb)
@@ -1699,7 +1744,7 @@ addLayer("D", {
                     if (hasUpgrade('D', 35)) {
                         return "<br>You have " + colorText("h2", "#c979ee", format(player.D.demoplex)) +
                             " Demoplexes and generate " + format(player.D.demoplexGen) +
-                            " Demoplexes/s which boost gamma gain by " + text + textbonus
+                            " Demoplexes/s which boost gamma gain by " + textdemo
                     }
                 }],
                 ["microtabs", "Duplicates"],
