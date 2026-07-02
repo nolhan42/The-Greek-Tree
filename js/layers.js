@@ -1696,6 +1696,11 @@ addLayer("D", {
                         return "You have " + colorText("h2", "#ac00fc", format(player.D.duplicates)) +
                             " Duplicates and generate " + format(player.D.dupliGen) +
                             " Duplicates/s which boost gamma gain by " + text + textbonus
+                    if (hasUpgrade('D', 35)) {
+                        return "<br>You have " + colorText("h2", "#c979ee", format(player.D.demoplex)) +
+                            " Demoplexes and generate " + format(player.D.demoplexGen) +
+                            " Demoplexes/s which boost gamma gain by " + text + textbonus
+                    }
                 }],
                 ["microtabs", "Duplicates"],
             ],
@@ -1869,7 +1874,7 @@ addLayer("D", {
         31: {
         title: "Duplicative Boost",
         description: "Total Duplicates/1e50^0.3 boost itself",
-        cost: new Decimal(1e50),
+        cost: new Decimal(1e500),
         currencyInternalName: "duplicates",
         currencyLayer: "D",
         currencyDisplayName: "Duplicates", 
@@ -2023,7 +2028,7 @@ addLayer("D", {
         6: {
             requirementDescription: "Require : 2e166 Duplicates (7)",
             done() { return new Decimal(player.D.duplicates || 0).gte("2e166")},
-            unlocked(){return hasMilestone(this.layer,5)},
+            unlocked(){return hasMilestone(this.layer,6)},
             effect() {
                 let A = getUpgradeCount('A')
                 let B = getUpgradeCount('B')
