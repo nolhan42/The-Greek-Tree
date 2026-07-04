@@ -289,9 +289,9 @@ addLayer("ach", {
         },
         51: {
             name: "So what ?",
-            tooltip: "Get 25 Duplicates Upgrade: 20 AP",
+            tooltip: "Get 25 delta Upgrade: 20 AP",
             done() {
-                return hasUpgrade('D',51)
+                return getUpgradeCount('D')
             },
             unlocked() {return hasAchievement('ach',46)},
             onComplete() {

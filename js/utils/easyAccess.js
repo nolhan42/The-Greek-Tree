@@ -7,13 +7,16 @@ function upgradeEffect(layer, id) {
 	return (tmp[layer].upgrades[id].effect)
 }
 
-function getUpgradeCount(layer) {
+function getUpgradeCount(layer, options = {}) {
     let count = new Decimal(0)
+    let { minId = 0, maxId = Infinity, ids = null } = options
 
     for (let id in layers[layer].upgrades) {
-        if (hasUpgrade(layer, id)) {
-            count = count.add(1)
-        }
+        let numId = Number(id)
+        if (!hasUpgrade(layer, id)) continue
+        if (ids && !ids.includes(numId)) continue  // if specific ids provided, only count those
+        if (numId < minId || numId > maxId) continue // filter by range
+        count = count.add(1)
     }
 
     return count
@@ -188,14 +191,27 @@ function getCurrencyGen(layer, config) {
     for (let [l, id] of (config.externalMilestones || []))
         if (hasMilestone(l, id)) gen = gen.mul(milestoneEffect(l, id))
     
-    for (let [c, field, multiplier, sign] of config.otherCurrencys || []) {
+    for (let [c, field, multiplier, options] of config.otherCurrencys || []) {
         let val = new Decimal(player[c]?.[field] || 0)
-        if (val.lte(0)) continue  // ← skip if 0, don't multiply gen by 0
-        if (sign == "x") gen = gen.mul(val.mul(multiplier))
+        if (val.lte(0)) continue
+
+        let sign = options?.[0] || "*"
+        let req = options?.[1]
+
+        if (req && hasUpgrade(c, req)) sign = "^"
+        if (sign == "*") gen = gen.mul(val.mul(multiplier))
         else gen = gen.mul(val.pow(multiplier))
     }
     
     for (let [id, field] of (config.dualUpgrades || []))
         if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id)[field])
     return gen
+}
+
+//___________EXP COST___________
+function expCost(layer, values, baseval){
+    let exp = baseval
+    for  (let [req,val] of values.values ||[])
+        if (layer.resets == req) exp == val
+    return exp
 }

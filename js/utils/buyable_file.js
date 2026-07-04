@@ -60,6 +60,7 @@ function buyableBulk(layer){
     if (layer == 'B'){
         if (hasMilestone('G', 5)) amt = amt.times(10)
         if (hasMilestone('D', 0)) amt = amt.times(5)
+        if (hasMilestone('D',7)) amt = amt.times(5)
     }
     return amt
 }
