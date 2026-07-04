@@ -44,6 +44,7 @@ function buyableCostFormula(layer, id) {
         if (id == '11') return "base*1.01^x²"
         else if (id == '12') return "base*1.12^x²"
         else if (id == '13') return "base*2.5^x^2.25"
+        else if (id == '14') return "base*5^x^2.25"
     }
 }
 

@@ -188,7 +188,14 @@ function getCurrencyGen(layer, config) {
     for (let [l, id] of (config.externalMilestones || []))
         if (hasMilestone(l, id)) gen = gen.mul(milestoneEffect(l, id))
     
-    for (let [c, field, multiplier] of config.otherCurrencys || [])
-        if (player[c] && player[c][field]) gen = gen.mul(player[c][field].mul(multiplier))
+    for (let [c, field, multiplier, sign] of config.otherCurrencys || []) {
+        let val = new Decimal(player[c]?.[field] || 0)
+        if (val.lte(0)) continue  // ← skip if 0, don't multiply gen by 0
+        if (sign == "x") gen = gen.mul(val.mul(multiplier))
+        else gen = gen.mul(val.pow(multiplier))
+    }
+    
+    for (let [id, field] of (config.dualUpgrades || []))
+        if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id)[field])
     return gen
 }

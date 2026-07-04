@@ -1652,18 +1652,24 @@ addLayer("D", {
 
         if (player.D.layerShown) data.unlocked = true
 
+        let powerd = new Decimal(3.5)
+        if (hasUpgrade('D',121)) powerd = new Decimal("1e6")
+        if (hasUpgrade('D',124)) powerd = new Decimal(1.75) 
+
         const duplicateConfig = {
             condition: () => hasMilestone('D', 3),
-            upgrades:  [11, 13, 14, 15, 22, 25, 31, 33, 35],
-            buyables:  [11, 12, 13],
+            upgrades:  [11, 13, 14, 15, 22, 25, 31, 33, 35, 41],
+            dualUpgrades: [[43, 'A']],
+            buyables:  [11, 12, 13, 14],
             milestones: [4, 6],
             externalUpgrades: [['G', 52], ['G', 54]],
-            otherCurrencys: [['D', 'demoplex', 3.5]],
+            otherCurrencys: [['D', 'demoplex', powerd, "^"]],
         }
 
         const demoplexConfig = {
             condition: () => hasUpgrade('D', 36),
-            upgrades:  [111,113,114,115],                   
+            upgrades:  [111,113,114,115,116,42,122,44],
+            dualUpgrades: [[43, 'B']],               
             buyables:  [],
             milestones: [],
             externalUpgrades: [],
@@ -1699,6 +1705,12 @@ addLayer("D", {
                 ["raw-html", function() {
                     let power = new Decimal(1.1)
                     let powerb = new Decimal(11)
+                    let powerd = new Decimal(3.5)
+                    let demoBoost = player.D.demoplex.mul(powerd)
+                    let demoText = "*"+powerd
+                    if (hasUpgrade('D', 121)) powerd = new Decimal("1e6")
+                    if (hasUpgrade('D',124)) {powerd = new Decimal('1.75') ; demoBoost = player.D.demoplex.pow(powerd) ; demoText = "^"+powerd}
+
                     let textbonus = ""
                     if (hasUpgrade('D', 23)) power = new Decimal(2.5)
                     //________TEXT________
@@ -1706,8 +1718,8 @@ addLayer("D", {
                         ? colorText("h2", "#ac00fc", "Duplicates^" + power)
                         : colorText("h2", "#ac00fc", format(player.D.duplicates.pow(power)))
                     let textdemo = shiftDown
-                        ? colorText("h2", "#c979ee", "Demoplex*3.5")
-                        : colorText("h2", "#c979ee", format(player.D.demoplex.mul(3.5)))
+                        ? colorText("h2", "#c979ee", "Demoplex" + demoText)
+                        : colorText("h2", "#c979ee", format(demoBoost))
                     if (hasMilestone(this.layer,5)) {
                         textbonus = shiftDown
                         ? " and beta by " + colorText("h2", '#ac00fc', "Duplicates^" + powerb)
@@ -1749,7 +1761,7 @@ addLayer("D", {
             },
             "Upgrades 2": {
                 unlocked() { return hasUpgrade('D', 36) },
-                content: ["raw-html", function() {if (hasUpgrade('D', 36)) return ["upgrades",[11]]}],
+                content: ["raw-html", function() {if (hasUpgrade('D', 36)) return ["upgrades",[11,12,13,14]]}],
                 buttonStyle: {"border-color": "#c979ee"},
             },
         },
@@ -1967,6 +1979,61 @@ addLayer("D", {
         currencyDisplayName: "Duplicates", 
         unlocked(){return hasUpgrade(this.layer,35)},
         },
+        41: {
+        title: "Duplicating beta power",
+        description: "Duplicates boost to beta^0.005 boost Duplicates",
+        cost: new Decimal(1e252),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,36) && hasUpgrade(this.layer,121)},
+        effect() {
+            let betaPower = player.D.duplicates.pow(11)
+            return betaPower.pow(0.005).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        42: {
+        title: "You need this I already know it",
+        description: "Previous upgrade effect^0.1 boost Demoplex",
+        cost: new Decimal(1e300),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,41)},
+        effect() {
+            return upgradeEffect('D',41).pow(0.1).max(1)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        43: {
+        title: "log10(A) & log10(B)",
+        description: "log10(Alpha amount) boost Duplicates & log10(Beta amount) boost Demoplex",
+        cost: new Decimal("3.9e309"),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,42)},
+        effect() {
+            let A = player.A.points.max(1).log10()
+            let B = player.B.points.max(1).log10()
+            return {A, B}
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id).A)+"x | "+format(upgradeEffect(this.layer,this.id).B)+"x"}
+        },
+        44: {
+        title: "Helping his friend",
+        description: "Duplicates boost Demoplex to a very small rate",
+        cost: new Decimal("2e409"),
+        currencyInternalName: "duplicates",
+        currencyLayer: "D",
+        currencyDisplayName: "Duplicates", 
+        unlocked(){return hasUpgrade(this.layer,43)},
+        effect() {
+            return player.D.duplicates.pow(0.0075)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
         //Demoplex Upgrades
         111: {
         title: "New New Adventure",
@@ -2036,18 +2103,64 @@ addLayer("D", {
         },
         effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
         },
-        115: {
-        title: "Delta Milestone",
-        description: "Delta Milestone amount boost Demoplex",
-        cost: new Decimal(2.5e3),
+        116: {
+        title: "Duplicate's",
+        description: "Duplicates^0.003 boost Demoplex",
+        cost: new Decimal(2e4),
         currencyInternalName: "demoplex",
         currencyLayer: "D",
         currencyDisplayName: "Demoplexes", 
-        unlocked(){return hasUpgrade("D",114)},
+        unlocked(){return hasUpgrade("D",115)},
         effect() {
-            return getMilestoneCount('D').max(1)
+            return player.D.duplicates.pow(0.003).max(1)
         },
         effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        121: {
+        title: "Demoplex to Duplicates",
+        description: "Demoplex*1e6 boost Duplicates + new upgrades",
+        cost: new Decimal(2e5),
+        currencyInternalName: "demoplex",
+        currencyLayer: "D",
+        currencyDisplayName: "Demoplexes", 
+        unlocked(){return hasUpgrade("D",116)},
+        },
+        122: {
+        title: "Upgrade ID",
+        description: "This upgrade id boost Demoplex",
+        cost: new Decimal(2.5e7),
+        currencyInternalName: "demoplex",
+        currencyLayer: "D",
+        currencyDisplayName: "Demoplexes", 
+        unlocked(){return hasUpgrade("D",121)},
+        effect() {
+            let val = new Decimal(this.id)
+            if (hasUpgrade('D',123)) val = val.mul(upgradeEffect('D',123))
+            return val
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        123: {
+        title: "Boost ID",
+        description: "Duplifications boost previous upgrade^2",
+        cost: new Decimal(1e17),
+        currencyInternalName: "demoplex",
+        currencyLayer: "D",
+        currencyDisplayName: "Demoplexes", 
+        unlocked(){return hasUpgrade("D",122)},
+        effect() {
+            return getBuyableAmount('D',13).pow(2)
+        },
+        effectDisplay(){return format(upgradeEffect(this.layer, this.id))+"x"}
+        },
+        124: {
+        title: "Changes for Boost",
+        description: "Demoplex boost Duplicates^1.75",
+        cost: new Decimal(5e9),
+        currencyInternalName: "demoplex",
+        currencyLayer: "D",
+        currencyDisplayName: "Demoplexes", 
+        unlocked(){return hasUpgrade("D",123)},
         },
     },
     milestones: {
@@ -2250,7 +2363,7 @@ addLayer("D", {
             //TEXT//
             let desc = 'x'+val+' to Duplicates gain<br>'
             let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
-            return desc + cost + buyableArrangement(this.layer, this.id, null)
+            return desc + cost + buyableArrangement(this.layer, this.id, 20)
         },
         canAfford() {
             let data = player[this.layer]
@@ -2266,6 +2379,39 @@ addLayer("D", {
         effect(x) {
             x = new Decimal(x)
             let oeff = new Decimal(6)
+            return oeff.pow(x)},
+        },
+        14: {
+        title: "Duplificatanations<br>",
+        cost(x) {
+            if (x === undefined) x = getBuyableAmount(this.layer, this.id)
+            x = new Decimal(x)
+
+            const base = new Decimal("1e385") //Basecose
+            return base.mul(new Decimal(5).pow(x.pow(2.25)))//base*5^x^2.25
+        },
+        display() {
+            let amt = getBuyableAmount(this.layer, this.id)
+            let val = new Decimal(35)
+            //TEXT//
+            let desc = 'x'+val+' to Duplicates gain<br>'
+            let cost = '<b>Cost:</b>'+ format(this.cost()) + ' Duplicates \n'
+            return desc + cost + buyableArrangement(this.layer, this.id, null)
+        },
+        canAfford() {
+            let data = player[this.layer]
+            if (!data) return false
+            data.duplicates = new Decimal(data.duplicates || 0)
+            return data.duplicates.gte(this.cost())
+        },
+        unlocked() {return getBuyableAmount(this.layer,13).gte(new Decimal(20))},
+        buy() {
+            if (!safeBuy(this.layer, this.cost(), "duplicates")) return
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(1))
+        },
+        effect(x) {
+            x = new Decimal(x)
+            let oeff = new Decimal(35)
             return oeff.pow(x)},
         },
     }
