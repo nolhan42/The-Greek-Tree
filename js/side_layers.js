@@ -289,13 +289,24 @@ addLayer("ach", {
         },
         51: {
             name: "So what ?",
-            tooltip: "Get 25 delta Upgrade: 20 AP",
+            tooltip: "Get 20 delta Upgrade: 20 AP",
             done() {
-                return getUpgradeCount('D')
+                return getUpgradeCount('D') >= 20
             },
             unlocked() {return hasAchievement('ach',46)},
             onComplete() {
                 addPoints("ach",20)
+            }
+        },
+        52: {
+            name: "A tree inside a Tree",
+            tooltip: "Unlock the Upgrade-Tree: 22 AP",
+            done() {
+                return hasUpgrade('D',46)
+            },
+            unlocked() {return hasAchievement('ach',46)},
+            onComplete() {
+                addPoints("ach",22)
             }
         },
     },
@@ -356,7 +367,10 @@ addLayer("stat", {
         },
         "Info": {
             content:[
-                "blank",["raw-html", "Adding Buyables only Affect the buyable it as been added to, and not the one down the chain (if there is one)"]],
+                "blank",["raw-html", "Adding Buyables only Affect the buyable it as been added to, and not the one down the chain (if there is one)<br><br>"
+                    +"On the Upgrade-Tree upgrades: <br>"+"Requirement white --> not enough currency<br> Requirement green --> enought currency<br>"
+                    +"Also, if multiples upgrades are on the same row, the price will change if you already have one on the same row"
+                ]],
         },
     },
 })

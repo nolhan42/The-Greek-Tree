@@ -55,7 +55,8 @@ function buyUpg(layer, id) {
 	let upg = tmp[layer].upgrades[id]
 	if (!player[layer].unlocked || player[layer].deactivated) return
 	if (!tmp[layer].upgrades[id].unlocked) return
-	if (player[layer].upgrades.includes(id)) return
+	let upgradeId = toNumber(id)
+	if (player[layer].upgrades.includes(upgradeId) || player[layer].upgrades.includes(id.toString())) return
 	if (upg.canAfford === false) return
 	let pay = layers[layer].upgrades[id].pay
 	if (pay !== undefined)
@@ -84,7 +85,7 @@ function buyUpg(layer, id) {
 			player[layer].points = player[layer].points.sub(cost)
 		}
 	}
-	player[layer].upgrades.push(id);
+	player[layer].upgrades.push(upgradeId);
 	if (upg.onPurchase != undefined)
 		run(upg.onPurchase, upg)
 	needCanvasUpdate = true

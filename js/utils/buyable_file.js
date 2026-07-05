@@ -43,7 +43,11 @@ function buyableCostFormula(layer, id) {
     } else if (layer == 'D'){
         if (id == '11') return "base*1.01^x²"
         else if (id == '12') return "base*1.12^x²"
-        else if (id == '13') return "base*2.5^x^2.25"
+        else if (id == '13') {
+            let val = "base*2.5^x^2.25"
+            if (hasUpgrade('D',212)) val = "base*2.5^x^2.1"
+            return val
+        }
         else if (id == '14') return "base*5^x^2.25"
     }
 }

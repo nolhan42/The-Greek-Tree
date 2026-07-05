@@ -178,40 +178,39 @@ function getCurrencyGen(layer, config) {
 
     for (let id of (config.upgrades || []))
         if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id))
+    
+    for (let [id, field] of (config.dualUpgrades || []))
+        if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id)[field])
 
     for (let id of (config.buyables || []))
         if (hasBuyable(layer, id)) gen = gen.mul(buyableEffect(layer, id))
 
-    for (let id of (config.milestones || []))
-        if (hasMilestone(layer, id)) gen = gen.mul(milestoneEffect(layer, id))
-
-    for (let [l, id] of (config.externalUpgrades || []))
-        if (hasUpgrade(l, id)) gen = gen.mul(upgradeEffect(l, id))
-
-    for (let [l, id] of (config.externalMilestones || []))
-        if (hasMilestone(l, id)) gen = gen.mul(milestoneEffect(l, id))
+    for (let entry of (config.milestones || [])) {
+        let [id, field] = Array.isArray(entry) ? entry : [entry, null]
+        if (hasMilestone(layer, id)) 
+            gen = gen.mul(field ? milestoneEffect(layer, id)[field] : milestoneEffect(layer, id))
+    }
     
+    for (let [l, id, field] of (config.externalUpgrades || []))
+        if (hasUpgrade(l, id)) gen = gen.mul(
+            field ? upgradeEffect(l, id)[field] : upgradeEffect(l, id)
+        )
+
+    for (let [l, id, field] of (config.externalMilestones || []))
+        if (hasMilestone(l, id)) gen = gen.mul(
+            field ? milestoneEffect(l, id)[field] : milestoneEffect(l, id)
+        )
     for (let [c, field, multiplier, options] of config.otherCurrencys || []) {
         let val = new Decimal(player[c]?.[field] || 0)
         if (val.lte(0)) continue
 
         let sign = options?.[0] || "*"
-        let req = options?.[1]
+        let req = options?.[1] || null
 
         if (req && hasUpgrade(c, req)) sign = "^"
         if (sign == "*") gen = gen.mul(val.mul(multiplier))
         else gen = gen.mul(val.pow(multiplier))
     }
     
-    for (let [id, field] of (config.dualUpgrades || []))
-        if (hasUpgrade(layer, id)) gen = gen.mul(upgradeEffect(layer, id)[field])
     return gen
-}
-
-//___________EXP COST___________
-function expCost(layer, values, baseval){
-    let exp = baseval
-    for  (let [req,val] of values.values ||[])
-        if (layer.resets == req) exp == val
-    return exp
 }

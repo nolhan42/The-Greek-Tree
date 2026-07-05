@@ -85,6 +85,8 @@ function getPointGen() {
 	if (hasUpgrade('D',12)) gain = gain.times(upgradeEffect('D',12))
 
 	if (hasAchievement('ach',23)) gain = gain.times(23)
+
+	if (player.D.dSeed.gte(1)) gain = gain.times(player.D.dSeed.pow(50000))
 	// Apply point gain exponent (example: upgrades/buyables can increase this)
 	let pointExp = new Decimal(1)
 	try {
